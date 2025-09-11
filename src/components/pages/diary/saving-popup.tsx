@@ -10,7 +10,7 @@ export function DiarySavingPopup() {
 			<Container vertical='small'>
 				<Column align='center' gap={12}>
 					<LoadingCircle size={48} />
-					<Typo.Body>Saving</Typo.Body>
+					<Typo.Body>저장중</Typo.Body>
 				</Column>
 			</Container>
 		</Popup>

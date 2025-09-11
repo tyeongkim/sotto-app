@@ -20,7 +20,7 @@ export function HomeMyDiariesList() {
 			) : (
 				<Content
 					icon={<BookDashed size={48} />}
-					description='Press “New Diary” to begin your story'
+					description='“+”를 눌러 이야기를 시작하세요'
 				/>
 			)}
 		</Container>

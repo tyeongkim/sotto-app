@@ -36,7 +36,7 @@ export function AuthBiometricPopup(props: AuthPopupProps) {
 			</Column>
 			<ButtonGroup smallPadding>
 				<Button fill variant='secondary' onClick={openAlternative}>
-					Use PIN instead
+					PIN 인증하기
 				</Button>
 			</ButtonGroup>
 		</Popup>

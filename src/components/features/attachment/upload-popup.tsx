@@ -58,12 +58,12 @@ export function AttachmentUploadPopup(
 		<Popup>
 			<PopupContent
 				icon={<CloudUpload />}
-				title='Uploading attachments'
+				title='첨부파일 업로드 중...'
 				description={`${order + 1} / ${attachments.length} - ${status}`}
 			/>
 			<ButtonGroup smallPadding>
 				<Button fill variant='secondary' onClick={onClickCancel}>
-					Cancel
+					취소
 				</Button>
 			</ButtonGroup>
 		</Popup>

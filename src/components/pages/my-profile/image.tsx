@@ -1,7 +1,7 @@
 import { Avatar } from '@/components/ui/avatar';
-import { resizeImage } from '@/lib/common';
+// import { resizeImage } from '@/lib/common';
 import { log } from '@/lib/log';
-import { apiClient } from '@/lib/managers/http';
+// import { apiClient } from '@/lib/managers/http';
 import { color } from '@/styles/color.css';
 import { message } from '@tauri-apps/plugin-dialog';
 import { Pencil } from 'lucide-react';
@@ -19,17 +19,20 @@ export function MyProfileImage() {
 			return;
 		}
 
-		const image = await resizeImage(file, 128);
+		// const image = await resizeImage(file, 128);
 		const prevImage = localStorage.getItem('profileImage');
 
 		try {
-			await apiClient.patch('/users/me', {
-				profileUrl: image,
-			});
-			localStorage.setItem('profileImage', image);
-			setProfileImage(image);
+			await message('현재 빌드에선 프로필 이미지 변경을 할 수 없습니다.');
+			throw new Error('Profile image change is disabled in current build');
+
+			// await apiClient.patch('/users/me', {
+			// 	profileUrl: image,
+			// });
+			// localStorage.setItem('profileImage', image);
+			// setProfileImage(image);
 		} catch (error) {
-			await message('Failed to update profile image.');
+			await message('프로필 이미지 업데이트에 실패했어요.');
 			log('error', 'Failed to update profile image', error);
 			if (prevImage) {
 				localStorage.setItem('profileImage', prevImage);

@@ -40,7 +40,7 @@ export default function IndexPage() {
 				{import.meta.env.DEV && <Typo.Body>{import.meta.env.MODE}</Typo.Body>}
 				{showSignUp ? (
 					<Link to='/sign-up'>
-						<Button fill>Sign up</Button>
+						<Button fill>회원가입</Button>
 					</Link>
 				) : (
 					<LoadingCircle size={32} />

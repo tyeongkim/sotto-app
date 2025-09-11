@@ -30,7 +30,7 @@ export function HomeMyDiaryDrawer(
 			await diaryManager.cancelShare(diary.uuid);
 		} catch (error) {
 			log('error', 'Fail to cancel sharing diary', error);
-			await message('Failed to cancel sharing the diary.');
+			await message('일기 공유 중지에 실패했습니다.');
 		} finally {
 			close();
 		}
@@ -54,8 +54,7 @@ export function HomeMyDiaryDrawer(
 				<Container vertical='small' horizontal='none'>
 					<Container vertical='small'>
 						<Typo.Body weight='medium'>
-							Shared with {diary.sharedWith.length.toLocaleString()} friend
-							{diary.sharedWith.length > 1 ? 's' : ''}
+							{diary.sharedWith.length.toLocaleString()}명의 친구와 공유됨
 						</Typo.Body>
 					</Container>
 					<div className={list}>
@@ -70,11 +69,11 @@ export function HomeMyDiaryDrawer(
 			<ButtonGroup>
 				{diary.sharedWith.length > 0 && (
 					<Button fill variant='secondary' onClick={onClickCancelSharing}>
-						Cancel sharing
+						공유 중지
 					</Button>
 				)}
 				<Button fill onClick={onClickDelete}>
-					Delete diary
+					일기 삭제
 				</Button>
 			</ButtonGroup>
 		</DiaryDetailDrawer>

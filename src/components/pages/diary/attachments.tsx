@@ -61,17 +61,19 @@ function AddPhoto() {
 				(file) => file.size <= 3.5 * 1024 * 1024,
 			);
 			if (diary.attachments.length + fileList.length > 5) {
-				await message('You can only add up to 5 photos.', { kind: 'error' });
+				await message('사진은 최대 5장까지 추가할 수 있어요.', {
+					kind: 'error',
+				});
 				return;
 			}
 			if (fileList.length < files.length) {
 				await message(
-					'Some files were too large and were not added. Maximum size is 3.5MB.',
+					'일부 파일이 너무 커서 추가되지 않았어요. 최대 크기는 3.5MB예요.',
 				);
 			}
 
 			if (fileList.length === 0) {
-				await message('No valid files were selected.');
+				await message('유효한 파일이 선택되지 않았어요.');
 				return;
 			}
 
@@ -92,7 +94,7 @@ function AddPhoto() {
 		<Item onClick={onClick}>
 			<Column className={fullHeight} gap={8} align='center'>
 				<ImagePlus />
-				<Typo.Caption weight='medium'>Add photo</Typo.Caption>
+				<Typo.Caption weight='medium'>사진 추가</Typo.Caption>
 			</Column>
 			<input
 				ref={inputRef}
@@ -182,7 +184,7 @@ function AttachmentItem(props: AttachmentProps) {
 				<img
 					className={image}
 					src={previewUrl}
-					alt='Attachment preview'
+					alt='첨부 이미지 미리보기'
 					draggable={false}
 					onClick={onClick}
 				/>

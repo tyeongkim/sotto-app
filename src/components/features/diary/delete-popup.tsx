@@ -26,7 +26,7 @@ export function DeleteDiaryPopup(props: DeleteDiaryPopupProps & OverlayProps) {
 				await callback();
 			} catch (error) {
 				log('error', 'Failed to delete diary:', error);
-				await message('Failed to delete diary.');
+				await message('일기 삭제에 실패했습니다.');
 			} finally {
 				close();
 			}
@@ -37,15 +37,15 @@ export function DeleteDiaryPopup(props: DeleteDiaryPopupProps & OverlayProps) {
 		<Popup>
 			<PopupContent
 				icon={<TriangleAlert />}
-				title='Delete diary?'
-				description='Deleted diaries cannot be recovered'
+				title='일기를 삭제할까요?'
+				description='삭제된 일기는 복구할 수 없어요'
 			/>
 			<ButtonGroup direction='horizontal' smallPadding>
 				<Button fill onClick={onClickDelete}>
-					Delete
+					삭제
 				</Button>
 				<Button fill variant='secondary' onClick={close}>
-					Cancel
+					취소
 				</Button>
 			</ButtonGroup>
 		</Popup>

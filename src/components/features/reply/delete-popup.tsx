@@ -28,7 +28,7 @@ export function ReplyDeletePopup(props: ReplyDeletePopupProps & OverlayProps) {
 			forceUpdate();
 		} catch (error) {
 			log('error', 'Failed to delete reply', error);
-			await message(`Failed to delete reply: ${error}`);
+			await message(`답글 삭제에 실패했어요: ${error}`);
 			return;
 		} finally {
 			close();
@@ -44,15 +44,15 @@ export function ReplyDeletePopup(props: ReplyDeletePopupProps & OverlayProps) {
 		<Popup>
 			<PopupContent
 				icon={<TriangleAlert />}
-				title={`Delete ${author.name}'s reply?`}
-				description='This action cannot be undo.'
+				title={`${author.name}님의 답글을 삭제할까요?`}
+				description='이 작업은 되돌릴 수 없어요.'
 			/>
 			<ButtonGroup smallPadding>
 				<Button fill onClick={onClickDelete}>
-					Delete
+					삭제
 				</Button>
 				<Button fill variant='secondary' onClick={close}>
-					Cancel
+					취소
 				</Button>
 			</ButtonGroup>
 		</Popup>

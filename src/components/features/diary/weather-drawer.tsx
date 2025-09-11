@@ -24,7 +24,7 @@ export function DiaryWeatherDrawer(
 
 	return (
 		<Drawer close={close}>
-			<DrawerTitle>Add weather</DrawerTitle>
+			<DrawerTitle>날씨 추가</DrawerTitle>
 			<Container>
 				<div className={grid}>
 					{weatherList.map((w) => (

@@ -60,7 +60,7 @@ export function ReplyListDrawer(props: ReplyListDrawerProps & OverlayProps) {
 			setReplies(decryptedReplies);
 		} catch (error) {
 			log('error', 'Failed to fetch replies', error);
-			await message(`Failed to fetch replies: ${error}`);
+			await message(`답글을 불러오지 못했어요: ${error}`);
 			close();
 		} finally {
 			setIsLoading(false);
@@ -76,7 +76,7 @@ export function ReplyListDrawer(props: ReplyListDrawerProps & OverlayProps) {
 
 	return (
 		<Drawer close={close}>
-			<DrawerTitle>Replies</DrawerTitle>
+			<DrawerTitle>답글</DrawerTitle>
 			{isLoading ? (
 				<Container vertical='large'>
 					<Row justify='center'>
@@ -92,7 +92,7 @@ export function ReplyListDrawer(props: ReplyListDrawerProps & OverlayProps) {
 			) : (
 				<Content
 					icon={<MessageCircleDashed size={36} />}
-					description='No replies yet'
+					description='아직 답글이 없어요'
 				/>
 			)}
 		</Drawer>

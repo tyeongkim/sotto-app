@@ -95,7 +95,7 @@ export function HomeFriendsDiariesSection() {
 	) : (
 		<Content
 			icon={<SmilePlus size={48} />}
-			description='Share this app to your friends'
+			description='친구에게 이 앱을 공유해보세요'
 		/>
 	);
 }

@@ -106,13 +106,13 @@ class LocationManager {
 	getPresetName(key: LocationPresetKey) {
 		switch (key) {
 			case 'home':
-				return 'Home';
+				return '집';
 			case 'secondHome':
-				return 'Home 2';
+				return '두 번째 집';
 			case 'school':
-				return 'School';
+				return '학교';
 			case 'work':
-				return 'Work';
+				return '직장';
 			default:
 				return key;
 		}

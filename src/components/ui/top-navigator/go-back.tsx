@@ -10,7 +10,7 @@ interface GoBackProps {
 }
 
 export function GoBack(props: GoBackProps) {
-	const { label = 'Back', beforeBack } = props;
+	const { label = '뒤로가기', beforeBack } = props;
 
 	const navigate = useNavigate();
 

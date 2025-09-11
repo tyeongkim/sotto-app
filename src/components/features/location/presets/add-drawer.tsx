@@ -25,14 +25,14 @@ export function LocationPresetsAddDrawer(
 
 	const onClickAdd = useCallback(async () => {
 		if (!address.trim()) {
-			await message('Please enter a valid address.');
+			await message('유효한 주소를 입력해 주세요.');
 			return;
 		}
 
 		try {
 			await locationManager.setPreset(name, address);
 		} catch (error) {
-			await message('Failed to add preset');
+			await message('프리셋 추가에 실패했어요');
 			return;
 		} finally {
 			close();
@@ -42,17 +42,13 @@ export function LocationPresetsAddDrawer(
 
 	return (
 		<Drawer close={close}>
-			<DrawerTitle>Add "{locationManager.getPresetName(name)}"</DrawerTitle>
+			<DrawerTitle>"{locationManager.getPresetName(name)}" 추가</DrawerTitle>
 			<InputField>
-				<Input
-					placeholder='Enter address'
-					value={address}
-					onValue={setAddress}
-				/>
+				<Input placeholder='주소 입력' value={address} onValue={setAddress} />
 			</InputField>
 			<ButtonGroup>
 				<Button fill onClick={onClickAdd}>
-					Add
+					추가
 				</Button>
 			</ButtonGroup>
 		</Drawer>

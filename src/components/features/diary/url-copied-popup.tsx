@@ -29,15 +29,15 @@ export function DiaryURLCopiedPopup(
 		<Popup>
 			<PopupContent
 				icon={<ClipboardCheck />}
-				title='URL Copied to clipboard'
-				description='Anyone have URL can see this diary'
+				title='URL이 클립보드에 복사되었어요'
+				description='URL을 가진 사람은 이 일기를 볼 수 있어요'
 			/>
 			<ButtonGroup smallPadding>
 				<Button fill variant='secondary' onClick={onClickQR}>
-					Show QR Code
+					QR 코드 보기
 				</Button>
 				<Button fill onClick={close}>
-					OK
+					확인
 				</Button>
 			</ButtonGroup>
 		</Popup>
@@ -64,7 +64,7 @@ function QRPopup(props: QRPopupProps & OverlayProps) {
 				/>
 				<ButtonGroup smallPadding>
 					<Button fill onClick={close}>
-						Close
+						닫기
 					</Button>
 				</ButtonGroup>
 			</Column>

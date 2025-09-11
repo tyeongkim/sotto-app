@@ -63,7 +63,7 @@ function EmojiSelectorDrawer(props: EmojiSelectorDrawerProps & OverlayProps) {
 	return (
 		<Drawer close={close}>
 			<Container vertical='small' horizontal='large'>
-				<Typo.Lead weight='strong'>How about your feeling?</Typo.Lead>
+				<Typo.Lead weight='strong'>지금 기분이 어떤가요?</Typo.Lead>
 			</Container>
 			<Container className={emojiContainer} vertical='small'>
 				<div className={emojiGrid}>

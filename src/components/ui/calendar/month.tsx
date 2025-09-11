@@ -29,7 +29,7 @@ export function MonthCalendar(props: MonthCalendarProps) {
 		<>
 			<Container vertical='small'>
 				<Row align='center' justify='space-between'>
-					<Typo.Lead weight='strong'>{date.format('MMMM')}</Typo.Lead>
+					<Typo.Lead weight='strong'>{date.month() + 1}월</Typo.Lead>
 					<Typo.Body color={color.sand}>{year}</Typo.Body>
 				</Row>
 			</Container>

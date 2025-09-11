@@ -28,9 +28,9 @@ export function AddFriendDrawer(props: OverlayProps) {
 
 	return (
 		<UserPickerDrawer
-			title='Add friends'
+			title='친구 추가'
 			defaultSelected={friends.map((f) => f.uuid)}
-			buttons={[{ label: 'Add', loading: isAdding, onClick: onClickAdd }]}
+			buttons={[{ label: '추가', loading: isAdding, onClick: onClickAdd }]}
 			close={close}
 		/>
 	);

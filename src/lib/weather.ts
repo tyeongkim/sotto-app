@@ -56,22 +56,22 @@ export function getWeatherIcon(weather?: Weather) {
 export function getWeatherLabel(weather: Weather) {
 	switch (weather) {
 		case 'sunny':
-			return 'Sunny';
+			return '맑음';
 		case 'cloudy':
-			return 'Cloudy';
+			return '구름 많음';
 		case 'rainy':
-			return 'Rainy';
+			return '비';
 		case 'windy':
-			return 'Windy';
+			return '바람';
 		case 'snowy':
-			return 'Snowy';
+			return '눈';
 		case 'foggy':
-			return 'Foggy';
+			return '안개';
 		case 'stormy':
-			return 'Stormy';
+			return '폭풍';
 		case 'drizzle':
-			return 'Drizzle';
+			return '이슬비';
 		default:
-			return 'Sunny';
+			return '맑음';
 	}
 }

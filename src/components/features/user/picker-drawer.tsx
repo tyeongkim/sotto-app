@@ -30,7 +30,7 @@ interface UserPickerDrawerProps extends DrawerProps {
 export function UserPickerDrawer(props: UserPickerDrawerProps & OverlayProps) {
 	const {
 		title,
-		placeholder = 'Search username',
+		placeholder = '유저네임 검색',
 		buttons,
 		defaultSelected = [],
 		close,
@@ -99,8 +99,8 @@ export function UserPickerDrawer(props: UserPickerDrawerProps & OverlayProps) {
 					</Container>
 					<Typo.Body>
 						{searchedUsers.length <= 0 && isSearching
-							? 'No users found'
-							: 'Search users'}
+							? '검색결과 없음'
+							: '사용자 검색결과가 여기에 표시됩니다'}
 					</Typo.Body>
 				</Column>
 			)}

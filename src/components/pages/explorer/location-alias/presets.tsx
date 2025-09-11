@@ -51,7 +51,7 @@ function Item(props: ItemProps) {
 						{locationManager.getPresetName(name)}
 					</Typo.Lead>
 					<Typo.Body color={color.sand}>
-						{location?.address || 'Click to add'}
+						{location?.address || '눌러서 추가하기'}
 					</Typo.Body>
 				</Column>
 			</Column>

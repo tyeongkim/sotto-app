@@ -56,7 +56,7 @@ export function HomeBottomNavigator() {
 						<Row gap={8}>
 							<ViewButton
 								icon={<LayoutGrid size={20} />}
-								label='List'
+								label='리스트'
 								value='list'
 							/>
 							<button
@@ -68,7 +68,7 @@ export function HomeBottomNavigator() {
 							</button>
 							<ViewButton
 								icon={<CalendarDays size={20} />}
-								label='Calendar'
+								label='캘린더'
 								value='calendar'
 							/>
 						</Row>

@@ -33,14 +33,14 @@ export function SignUpConfirmPinSection() {
 			<TopNavigator leadingArea={<GoBack />} />
 			<Column className={fillHeight}>
 				<Container className={title}>
-					<Typo.Title weight='strong'>Confirm PIN</Typo.Title>
+					<Typo.Title weight='strong'>PIN 확인</Typo.Title>
 				</Container>
 				<Container>
 					<PINInput onPin={onPin} />
 				</Container>
 				{isUnmatched && (
 					<Container className={pinUnmatched}>
-						<Typo.Body>PIN does not match</Typo.Body>
+						<Typo.Body>PIN이 일치하지 않습니다</Typo.Body>
 					</Container>
 				)}
 			</Column>

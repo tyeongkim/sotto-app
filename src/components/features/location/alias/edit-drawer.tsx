@@ -24,7 +24,7 @@ export function LocationAliasEditDrawer(
 
 	const onClickApply = useCallback(async () => {
 		if (!name || !address) {
-			await message('Please fill in all fields.');
+			await message('모든 항목을 입력해 주세요.');
 			return;
 		}
 
@@ -32,7 +32,7 @@ export function LocationAliasEditDrawer(
 			await locationManager.updateAlias(alias.uuid, { name, address });
 		} catch (error) {
 			log('error', 'Failed to edit alias:', error);
-			await message('Failed to edit alias.');
+			await message('별칭 수정에 실패했어요.');
 		} finally {
 			close();
 		}
@@ -40,20 +40,18 @@ export function LocationAliasEditDrawer(
 
 	return (
 		<Drawer close={close}>
-			<DrawerTitle>Edit {alias.name ? `"${alias.name}"` : 'alias'}</DrawerTitle>
-			<InputField label='Name'>
-				<Input placeholder='Enter name' value={name} onValue={setName} />
+			<DrawerTitle>
+				{alias.name ? `"${alias.name}" 수정` : '별칭 수정'}
+			</DrawerTitle>
+			<InputField label='이름'>
+				<Input placeholder='이름 입력' value={name} onValue={setName} />
 			</InputField>
-			<InputField label='Address'>
-				<Input
-					placeholder='Enter address'
-					value={address}
-					onValue={setAddress}
-				/>
+			<InputField label='주소'>
+				<Input placeholder='주소 입력' value={address} onValue={setAddress} />
 			</InputField>
 			<ButtonGroup>
 				<Button fill onClick={onClickApply}>
-					Apply
+					적용
 				</Button>
 			</ButtonGroup>
 		</Drawer>

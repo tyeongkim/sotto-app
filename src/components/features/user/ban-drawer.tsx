@@ -36,7 +36,7 @@ export function BanFriendDrawer(props: BanUserDrawerProps & OverlayProps) {
 			await callback?.(friend);
 		} catch (error) {
 			log('error', 'Failed to block friend', error);
-			await message('Failed to block friend');
+			await message('친구 차단에 실패했습니다');
 		}
 
 		close();
@@ -49,20 +49,20 @@ export function BanFriendDrawer(props: BanUserDrawerProps & OverlayProps) {
 					<Avatar size={56} src={friend.profileUrl} />
 				</Container>
 				<Container className={center} vertical='small'>
-					<Typo.Lead weight='strong'>Block “{friend.name}”?</Typo.Lead>
+					<Typo.Lead weight='strong'>“{friend.name}”님을 차단할까요?</Typo.Lead>
 				</Container>
 				<Container className={center} vertical='none'>
 					<Typo.Body className={banWarning}>
-						You will never receive friends diary from “{friend.name}”
+						앞으로 “{friend.name}”님의 일기를 받을 수 없어요
 					</Typo.Body>
 				</Container>
 			</Container>
 			<ButtonGroup direction='horizontal'>
 				<Button fill onClick={onClickBlock}>
-					Block
+					차단
 				</Button>
 				<Button variant='secondary' fill onClick={close}>
-					Cancel
+					취소
 				</Button>
 			</ButtonGroup>
 		</Drawer>

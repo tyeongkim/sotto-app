@@ -44,12 +44,12 @@ export function HomeFriendDiaryDrawer(
 			<Container horizontal='large'>
 				<Row gap={8} align='center' justify='start'>
 					<Avatar size={32} />
-					<Typo.Body weight='medium'>Shared by {friend.name}</Typo.Body>
+					<Typo.Body weight='medium'>{friend.name}가 공유함</Typo.Body>
 				</Row>
 			</Container>
 			<ButtonGroup>
 				<Button fill onClick={onClickDelete}>
-					Block “{friend.name}”
+					{friend.name} 차단
 				</Button>
 			</ButtonGroup>
 		</DiaryDetailDrawer>

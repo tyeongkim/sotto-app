@@ -34,14 +34,12 @@ export function ShareDiaryDrawer(props: DiaryShareDrawerProps & OverlayProps) {
 	const onClickShare = useCallback(
 		async (selectedUsers: Array<User>) => {
 			if (!isSharable) {
-				await message('Please add some content to your diary before sharing.');
+				await message('일기를 공유하려면 내용을 추가해주세요.');
 				return;
 			}
 
 			if (!diary.shareUUID && selectedUsers.length === 0) {
-				await message(
-					'Please select at least one user to share your diary with.',
-				);
+				await message('일기를 공유하려면 최소 한 명의 사용자를 선택해주세요.');
 				return;
 			}
 
@@ -68,7 +66,7 @@ export function ShareDiaryDrawer(props: DiaryShareDrawerProps & OverlayProps) {
 
 	const onClickShareViaUrl = useCallback(async () => {
 		if (!isSharable) {
-			await message('Please add some content to your diary before sharing.');
+			await message('일기를 공유하려면 내용을 추가해주세요.');
 			return;
 		}
 
@@ -90,7 +88,7 @@ export function ShareDiaryDrawer(props: DiaryShareDrawerProps & OverlayProps) {
 
 	const onStopUrlSharingClick = useCallback(async () => {
 		if (!diary.isSharedViaURL) {
-			await message('This diary is not shared via URL.');
+			await message('이 일기는 URL을 통해 공유되지 않았습니다.');
 			return;
 		}
 
@@ -111,17 +109,17 @@ export function ShareDiaryDrawer(props: DiaryShareDrawerProps & OverlayProps) {
 
 	return (
 		<UserPickerDrawer
-			title='Share with your friends'
+			title='친구들에게 일기 공유하기'
 			buttons={[
 				{
-					label: diary.isSharedViaURL ? 'Stop URL Sharing' : 'Share via URL',
+					label: diary.isSharedViaURL ? 'URL 공유 중단' : 'URL로 공유',
 					variant: 'secondary',
 					loading: isProcessing,
 					onClick: diary.isSharedViaURL
 						? onClickStopShareViaUrl
 						: onClickShareViaUrl,
 				},
-				{ label: 'Apply', loading: isProcessing, onClick: onClickShare },
+				{ label: '공유', loading: isProcessing, onClick: onClickShare },
 			]}
 			defaultSelected={diary.sharedWith}
 			close={close}

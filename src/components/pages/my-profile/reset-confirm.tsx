@@ -22,7 +22,7 @@ export function MyProfileResetConfirmDrawer(props: OverlayProps) {
 				location.reload();
 			});
 		} catch (error) {
-			await message('Reset failed. Please try again later.');
+			await message('초기화에 실패했어요. 잠시 후 다시 시도해 주세요.');
 			console.error('Reset failed:', error);
 			close();
 		}
@@ -37,18 +37,18 @@ export function MyProfileResetConfirmDrawer(props: OverlayProps) {
 					</div>
 				</Container>
 				<Container className={centered} vertical='small'>
-					<Typo.Lead weight='strong'>Are you sure?</Typo.Lead>
+					<Typo.Lead weight='strong'>정말 초기화할까요?</Typo.Lead>
 				</Container>
 				<Container className={centered} vertical='none'>
-					<Typo.Body>Your data will be deleted and log out</Typo.Body>
+					<Typo.Body>모든 데이터가 삭제되고 로그아웃돼요.</Typo.Body>
 				</Container>
 			</Container>
 			<ButtonGroup direction='horizontal'>
 				<Button fill onClick={onClickReset}>
-					Reset
+					초기화
 				</Button>
 				<Button fill variant='secondary' onClick={close}>
-					Cancel
+					취소
 				</Button>
 			</ButtonGroup>
 		</Drawer>

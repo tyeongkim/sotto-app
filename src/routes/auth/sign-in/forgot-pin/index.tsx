@@ -13,9 +13,9 @@ export default function SignInForgotPinPage() {
 	const onClickDelete = useCallback(async () => {
 		if (
 			await confirm(
-				'This action cannot be undone. you must create a new account, and all your diaries will be deleted.',
+				'이 작업은 되돌릴 수 없습니다. 새 계정을 만들어야 하며 모든 일기가 삭제됩니다.',
 				{
-					title: 'Delete all diaries and log out?',
+					title: '모든 일기를 삭제하고 로그아웃할까요?',
 					kind: 'warning',
 				},
 			)
@@ -29,15 +29,15 @@ export default function SignInForgotPinPage() {
 		<Column className={page}>
 			<Content
 				icon={<ShieldQuestion size={48} />}
-				title='Forgot your PIN?'
-				description='You have to delete all your diaries and log out'
+				title='PIN을 잊으셨나요?'
+				description='모든 일기를 삭제하고 로그아웃해야 합니다'
 			/>
 			<ButtonGroup direction='vertical' bottomSafeAreaPadding>
 				<Button fill variant='text' onClick={onClickDelete}>
-					Delete all data and log out
+					모든 데이터를 삭제하고 로그아웃
 				</Button>
 				<Link to='/sign-in/pin'>
-					<Button fill>Cancel</Button>
+					<Button fill>취소</Button>
 				</Link>
 			</ButtonGroup>
 		</Column>

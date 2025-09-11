@@ -43,9 +43,9 @@ export default function ExplorerDiariesDetailPage() {
 
 	return (
 		<>
-			<TopNavigator leadingArea={<GoBack label='Diaries' />} />
+			<TopNavigator leadingArea={<GoBack label='일기' />} />
 			<Container vertical='small'>
-				<Typo.Title weight='strong'>{diary.title || 'Untitled'}</Typo.Title>
+				<Typo.Title weight='strong'>{diary.title || '제목 없음'}</Typo.Title>
 			</Container>
 			<Container vertical='small'>
 				<Row align='center' justify='start' gap={8}>
@@ -59,35 +59,34 @@ export default function ExplorerDiariesDetailPage() {
 					/>
 					<Typo.Body weight='medium'>
 						{diary.sharedBy
-							? `Shared by ${friendManager.getFriend(diary.sharedBy)?.name}`
-							: `by ${localStorage.getItem('name')}`}
+							? `${friendManager.getFriend(diary.sharedBy)?.name}님이 공유함`
+							: `${localStorage.getItem('name')}님 작성`}
 					</Typo.Body>
 				</Row>
 			</Container>
 			<PaddingDivider />
 			{showEncryptedData ? (
 				<ExplorerContent
-					label='Encrypted Data'
-					content={diary.encryptedData?.toString() || 'No data available'}
+					label='암호화된 데이터'
+					content={diary.encryptedData?.toString() || '데이터 없음'}
 				/>
 			) : (
 				<Container>
 					<Button fill variant='secondary' onClick={onClickRevealData}>
-						Click to reveal data -{' '}
-						{bytesToSize(diary.encryptedData?.length ?? 0)}
+						데이터 보기 - {bytesToSize(diary.encryptedData?.length ?? 0)}
 					</Button>
 				</Container>
 			)}
 			<PaddingDivider />
 			<ExplorerContent
 				label='Nonce'
-				content={diary.nonce?.toString() || 'No data available'}
+				content={diary.nonce?.toString() || '데이터 없음'}
 			/>
 			<PaddingDivider />
 			{diary.encryptedKey && (
 				<ExplorerContent
-					label='Encrypted Key'
-					content={diary.encryptedKey?.toString() || 'No data available'}
+					label='암호화된 키'
+					content={diary.encryptedKey?.toString() || '데이터 없음'}
 				/>
 			)}
 			{/* <Container vertical='small'>
@@ -96,16 +95,16 @@ export default function ExplorerDiariesDetailPage() {
 			<Container>
 				<Column gap={8}>
 					<Typo.Caption color={color.sand}>
-						Created : {new Date(diary.createdAt).toLocaleString()}
+						생성: {new Date(diary.createdAt).toLocaleString()}
 					</Typo.Caption>
 					<Typo.Caption color={color.sand}>
-						Last Edited : {new Date(diary.updatedAt).toLocaleString()}
+						마지막 수정: {new Date(diary.updatedAt).toLocaleString()}
 					</Typo.Caption>
 				</Column>
 			</Container>
 			<ButtonGroup float>
 				<Button fill onClick={onClickDeleteDiary}>
-					Delete diary
+					일기 삭제
 				</Button>
 			</ButtonGroup>
 		</>

@@ -68,7 +68,7 @@ export default function DiaryPage() {
 				next();
 			} catch (error) {
 				log('error', 'Error while saving diary', error);
-				await message('Failed to save diary. Please try again.');
+				await message('일기 저장에 실패했습니다. 다시 시도해주세요.');
 			} finally {
 				setIsSaving(false);
 				closeSavingPopup();
@@ -124,14 +124,14 @@ export default function DiaryPage() {
 							/>
 							<input
 								className={titleInput}
-								placeholder='New Diary'
+								placeholder='새 일기'
 								value={diary.title}
 								onChange={(e) => setTitle(e.target.value)}
 								disabled={isSaving || isReadOnly}
 							/>
-							<Typo.Caption
-								color={color.sand}
-							>{`Last Edited : ${new Date(diary.updatedAt).toLocaleString()}`}</Typo.Caption>
+							<Typo.Caption color={color.sand}>{`마지막 수정: ${new Date(
+								diary.updatedAt,
+							).toLocaleString()}`}</Typo.Caption>
 						</Column>
 						<DiaryAdditionalInfo />
 					</Column>
@@ -145,7 +145,7 @@ export default function DiaryPage() {
 				>
 					<textarea
 						className={textArea}
-						placeholder='Write your diary'
+						placeholder='일기를 작성하세요'
 						value={diary.content}
 						onChange={(e) => setContent(e.target.value)}
 						disabled={isSaving || isReadOnly}

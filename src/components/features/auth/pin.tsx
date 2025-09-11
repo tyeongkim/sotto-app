@@ -24,7 +24,7 @@ export function AuthPINPopup(props: AuthPopupProps) {
 					throw new Error('PIN not found');
 				}
 				if (pin !== savedPin) {
-					await message('Invalid PIN', { kind: 'error' });
+					await message('올바르지 않은 PIN', { kind: 'error' });
 					return;
 				}
 				try {
@@ -43,7 +43,7 @@ export function AuthPINPopup(props: AuthPopupProps) {
 		<Popup className={popup}>
 			<Container vertical='regular'>
 				<Column align='center'>
-					<Typo.Lead weight='strong'>Enter your PIN</Typo.Lead>
+					<Typo.Lead weight='strong'>PIN 입력</Typo.Lead>
 				</Column>
 			</Container>
 			<Container>
@@ -53,7 +53,7 @@ export function AuthPINPopup(props: AuthPopupProps) {
 			</Container>
 			<ButtonGroup smallPadding>
 				<Button fill variant='secondary' onClick={openAlternative}>
-					Use biometric instead
+					생체 인증하기
 				</Button>
 			</ButtonGroup>
 		</Popup>

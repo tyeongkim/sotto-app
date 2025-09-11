@@ -17,12 +17,12 @@ export default function ExplorerDiariesPage() {
 
 	return (
 		<>
-			<TopNavigator leadingArea={<GoBack label='Profile' />} />
+			<TopNavigator leadingArea={<GoBack label='프로필' />} />
 			<ExplorerHeader
-				title='Diaries'
+				title='일기'
 				count={diaries.length}
 				search
-				placeholder='Search by title or content'
+				placeholder='제목 또는 내용으로 검색'
 			/>
 			<Container>
 				<Column gap={8}>
@@ -32,14 +32,16 @@ export default function ExplorerDiariesPage() {
 							leadingArea={
 								<Row align='center' gap={8}>
 									<Typo.Lead>{d.emoji}</Typo.Lead>
-									<Typo.Body weight='strong'>{d.title || 'Untitled'}</Typo.Body>
+									<Typo.Body weight='strong'>
+										{d.title || '제목 없음'}
+									</Typo.Body>
 								</Row>
 							}
 							trailingArea={
 								<Row gap={8} align='center'>
 									{d.sharedBy && (
 										<Typo.Caption>
-											by {friendManager.getFriend(d.sharedBy)?.name}
+											작성자 {friendManager.getFriend(d.sharedBy)?.name}
 										</Typo.Caption>
 									)}
 									<ChevronRight size={20} />

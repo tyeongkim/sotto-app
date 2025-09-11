@@ -15,11 +15,11 @@ export default function ExplorerLocationAliasPage() {
 	return (
 		<>
 			<TopNavigator
-				leadingArea={<GoBack label='Profile' />}
+				leadingArea={<GoBack label='프로필' />}
 				trailingArea={<Plus onClick={openAddAlias} />}
 			/>
 			<ExplorerHeader
-				title='Location Alias'
+				title='위치 별칭'
 				count={locationManager.getSavedCount()}
 			/>
 			<ExplorerLocationAliasPresets />

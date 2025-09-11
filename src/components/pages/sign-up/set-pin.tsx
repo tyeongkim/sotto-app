@@ -26,7 +26,7 @@ export function SignUpSetPinSection() {
 			<TopNavigator leadingArea={<GoBack />} />
 			<Column className={fillHeight}>
 				<Container className={title}>
-					<Typo.Title weight='strong'>Set PIN</Typo.Title>
+					<Typo.Title weight='strong'>PIN 설정</Typo.Title>
 				</Container>
 				<Container>
 					<PINInput onPin={onPin} />

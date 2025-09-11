@@ -27,15 +27,15 @@ export function DiaryStopURLSharingPopup(
 		<Popup>
 			<PopupContent
 				icon={<TriangleAlert />}
-				title='Stop URL sharing?'
-				description='Existing URL will be useless and cannot undo'
+				title='URL 공유를 중지할까요?'
+				description='기존 URL은 더 이상 사용할 수 없으며 되돌릴 수 없어요'
 			/>
 			<ButtonGroup smallPadding>
 				<Button fill onClick={onClickStop}>
-					Stop
+					중지
 				</Button>
 				<Button fill variant='secondary' onClick={close}>
-					Cancel
+					취소
 				</Button>
 			</ButtonGroup>
 		</Popup>

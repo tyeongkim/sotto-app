@@ -23,7 +23,7 @@ export function MyProfileChangeNameDrawer(props: OverlayProps) {
 		}
 
 		if (!/^[a-zA-Z\s]+$/.test(name)) {
-			await message('Name can only contain letters and spaces.', {
+			await message('이름은 영문자와 공백만 사용할 수 있어요.', {
 				kind: 'error',
 			});
 			close();
@@ -36,7 +36,7 @@ export function MyProfileChangeNameDrawer(props: OverlayProps) {
 			});
 			localStorage.setItem('name', name);
 		} catch (error) {
-			await message('Failed to change name');
+			await message('이름 변경에 실패했어요.');
 			log('error', 'Failed to change name', error);
 			if (prevName) {
 				localStorage.setItem('name', prevName);
@@ -49,13 +49,13 @@ export function MyProfileChangeNameDrawer(props: OverlayProps) {
 
 	return (
 		<Drawer {...props}>
-			<DrawerTitle>Change name</DrawerTitle>
+			<DrawerTitle>이름 변경</DrawerTitle>
 			<Container vertical='small'>
-				<Input placeholder='New name' value={name} onValue={setName} />
+				<Input placeholder='새 이름' value={name} onValue={setName} />
 			</Container>
 			<ButtonGroup>
 				<Button fill onClick={onClickChange} disabled={!name}>
-					Change
+					변경
 				</Button>
 			</ButtonGroup>
 		</Drawer>

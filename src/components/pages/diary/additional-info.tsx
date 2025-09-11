@@ -35,14 +35,12 @@ export function DiaryAdditionalInfo() {
 		<Row gap={8}>
 			<Row className={item} gap={6} align='center' onClick={onClickLocation}>
 				<MapPin size={20} />
-				<Typo.Body weight='medium'>
-					{diary.location || 'Add location'}
-				</Typo.Body>
+				<Typo.Body weight='medium'>{diary.location || '위치 추가'}</Typo.Body>
 			</Row>
 			<Row className={item} gap={6} align='center' onClick={onClickWeather}>
 				<WeatherIcon size={20} />
 				<Typo.Body weight='medium'>
-					{diary.weather ? getWeatherLabel(diary.weather) : 'Add weather'}
+					{diary.weather ? getWeatherLabel(diary.weather) : '날씨 추가'}
 				</Typo.Body>
 			</Row>
 		</Row>

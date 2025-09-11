@@ -21,14 +21,14 @@ export default function ExplorerFriendsPage() {
 	return (
 		<>
 			<TopNavigator
-				leadingArea={<GoBack label='Profile' />}
+				leadingArea={<GoBack label='프로필' />}
 				trailingArea={<Plus onClick={openAddFriend} />}
 			/>
 			<ExplorerHeader
-				title='Friends'
+				title='친구'
 				count={friends.length}
 				search
-				placeholder='Search by name or username'
+				placeholder='이름 또는 사용자 이름으로 검색'
 			/>
 			<Container>
 				<Column gap={8}>

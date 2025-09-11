@@ -55,9 +55,9 @@ export function convertFileToBase64(file: File): Promise<string> {
 }
 
 export function bytesToSize(bytes: number): string {
-	if (bytes === 0) return '0 Bytes';
+	if (bytes === 0) return '0 바이트';
 	const k = 1024;
-	const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+	const sizes = ['바이트', 'KB', 'MB', 'GB'];
 	const i = Math.floor(Math.log(bytes) / Math.log(k));
 	return `${(bytes / k ** i).toFixed(2)} ${sizes[i]}`;
 }

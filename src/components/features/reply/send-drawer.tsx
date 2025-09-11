@@ -29,13 +29,13 @@ export function ReplySendDrawer(props: ReplySendDrawerProps & OverlayProps) {
 
 	const onClickSend = useCallback(async () => {
 		if (!content) {
-			await message('Please enter a message');
+			await message('메시지를 입력해 주세요');
 			return;
 		}
 
 		const user = friendManager.getFriend(diary.sharedBy || '');
 		if (!user) {
-			await message('User not found');
+			await message('사용자를 찾을 수 없어요');
 			return;
 		}
 
@@ -54,7 +54,7 @@ export function ReplySendDrawer(props: ReplySendDrawerProps & OverlayProps) {
 			close();
 		} catch (error) {
 			log('error', 'Failed to send reply', error);
-			await message(`Failed to send reply: ${error}`);
+			await message(`답글 전송에 실패했어요: ${error}`);
 			return;
 		} finally {
 			setIsSending(false);
@@ -63,14 +63,14 @@ export function ReplySendDrawer(props: ReplySendDrawerProps & OverlayProps) {
 
 	return (
 		<Drawer close={close}>
-			<DrawerTitle>Send reply</DrawerTitle>
+			<DrawerTitle>답글 보내기</DrawerTitle>
 			<Container vertical='small'>
 				<Container className={wrapper} horizontal='regular'>
 					<Column className={fullHeight} gap={12}>
 						<EmojiInput defaultValue={emoji} onValue={setEmoji} />
 						<textarea
 							className={textArea}
-							placeholder='Write short message'
+							placeholder='짧은 메시지를 적어보세요'
 							value={content}
 							onChange={(e) => setContent(e.target.value)}
 						/>
@@ -79,7 +79,7 @@ export function ReplySendDrawer(props: ReplySendDrawerProps & OverlayProps) {
 			</Container>
 			<ButtonGroup>
 				<Button fill onClick={onClickSend} loading={isSending}>
-					Send
+					보내기
 				</Button>
 			</ButtonGroup>
 		</Drawer>

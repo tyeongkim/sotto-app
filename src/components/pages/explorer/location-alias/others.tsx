@@ -13,7 +13,7 @@ export function ExplorerLocationAliasOthers() {
 
 	return (
 		<>
-			<CompactListTitle title='Others' />
+			<CompactListTitle title='기타' />
 			{aliases.map((a) => (
 				<Item key={a.uuid} alias={a} />
 			))}

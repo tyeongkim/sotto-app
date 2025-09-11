@@ -34,15 +34,15 @@ export function LocationPresetsResetConfirmPopup(
 		<Popup>
 			<PopupContent
 				icon={<TriangleAlert />}
-				title={`Reset "${locationManager.getPresetName(name)}"?`}
-				description='This action cannot be undo.'
+				title={`\"${locationManager.getPresetName(name)}\"를 초기화할까요?`}
+				description='이 작업은 되돌릴 수 없어요.'
 			/>
 			<ButtonGroup smallPadding direction='horizontal'>
 				<Button fill onClick={onClickReset}>
-					Reset
+					초기화
 				</Button>
 				<Button fill variant='secondary' onClick={onClickCancel}>
-					Cancel
+					취소
 				</Button>
 			</ButtonGroup>
 		</Popup>

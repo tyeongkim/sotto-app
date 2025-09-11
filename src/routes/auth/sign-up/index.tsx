@@ -54,12 +54,12 @@ export default function SignUpPage() {
 				localStorage.setItem('name', name);
 				localStorage.setItem('useBiometricLogin', biometricLogin.toString());
 
-				await message(`Sign up successful! Welcome ${user.name}`);
+				await message(`회원가입이 완료되었습니다! 환영합니다 ${user.name}`);
 				await processSignIn(pin);
 
 				navigate('/home');
 			} catch (error) {
-				await message(`Sign up failed. ${error}`, { kind: 'error' });
+				await message(`회원가입에 실패했습니다. ${error}`, { kind: 'error' });
 				log('error', 'Sign up failed', error);
 			}
 		},

@@ -27,15 +27,15 @@ export function AttachmentDeletePopup(
 		<Popup>
 			<PopupContent
 				icon={<TriangleAlert />}
-				title='Delete attachment?'
-				description='This action cannot be undo.'
+				title='첨부파일을 삭제할까요?'
+				description='이 작업은 되돌릴 수 없어요.'
 			/>
 			<ButtonGroup smallPadding>
 				<Button fill onClick={onClickDelete}>
-					Delete
+					삭제
 				</Button>
 				<Button fill variant='secondary' onClick={close}>
-					Cancel
+					취소
 				</Button>
 			</ButtonGroup>
 		</Popup>

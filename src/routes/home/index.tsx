@@ -41,8 +41,8 @@ export default function HomePage() {
 			/>
 			<Tabs defaultValue='my'>
 				<TabsGroup>
-					<TabsItem value='my'>My</TabsItem>
-					<TabsItem value='friends'>Friends</TabsItem>
+					<TabsItem value='my'>내 일기</TabsItem>
+					<TabsItem value='friends'>친구</TabsItem>
 				</TabsGroup>
 				<TabsContent value='my'>
 					<HomeMyDiariesSection />

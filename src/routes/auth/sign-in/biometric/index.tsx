@@ -16,7 +16,7 @@ export default function SignInBiometricPage() {
 
 	const authenticateBiometric = useCallback(async () => {
 		try {
-			await authenticate('Authenticate to continue');
+			await authenticate('계속하려면 인증하세요');
 			const pin = await getItem('sotto-app');
 			if (!pin) {
 				throw new Error('PIN not found');
@@ -45,7 +45,7 @@ export default function SignInBiometricPage() {
 				<ButtonGroup bottomSafeAreaPadding>
 					<Link to='/sign-in/pin'>
 						<Button fill variant='secondary'>
-							Use PIN instead
+							PIN으로 로그인
 						</Button>
 					</Link>
 				</ButtonGroup>

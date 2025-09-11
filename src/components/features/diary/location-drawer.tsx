@@ -63,10 +63,10 @@ export function DiaryLocationDrawer(props: LocationDrawerProps & OverlayProps) {
 
 	return (
 		<Drawer close={close}>
-			<DrawerTitle>Add location</DrawerTitle>
+			<DrawerTitle>위치 추가</DrawerTitle>
 			<Container vertical='small'>
 				<Input
-					placeholder='Enter your address'
+					placeholder='주소를 입력하세요'
 					value={address}
 					onValue={setAddress}
 				/>
@@ -96,10 +96,10 @@ export function DiaryLocationDrawer(props: LocationDrawerProps & OverlayProps) {
 			</Container>
 			<PaddingDivider />
 			<CompactListTitle
-				title='Recent locations'
+				title='최근 위치'
 				trailingArea={
 					<Typo.Caption color={color.sand} onClick={onClickClearHistory}>
-						Clear
+						지우기
 					</Typo.Caption>
 				}
 			/>
@@ -116,7 +116,7 @@ export function DiaryLocationDrawer(props: LocationDrawerProps & OverlayProps) {
 			))}
 			<ButtonGroup>
 				<Button fill onClick={onClickAdd}>
-					Add
+					추가
 				</Button>
 			</ButtonGroup>
 		</Drawer>

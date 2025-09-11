@@ -42,16 +42,25 @@ public/
 src/
   binding/
     function/
+      decrypt-data.ts
       decrypt-diary.ts
       decrypt-reply.ts
-      encrypt-json.ts
+      encrypt-data.ts
       encrypt-key-for-recipient.ts
+      generate-aes-key.ts
       generate-key-pair.ts
     types/
+      attachment.d.ts
       diary-data.d.ts
       reply-data.d.ts
   components/
     features/
+      attachment/
+        styles/
+          focus.css.ts
+        delete-popup.tsx
+        focus.tsx
+        upload-popup.tsx
       auth/
         styles/
           biometric.css.ts
@@ -63,6 +72,7 @@ src/
       diary/
         styles/
           detail-drawer.css.ts
+          in-date-drawer.css.ts
           location-drawer.css.ts
           share-drawer.css.ts
           weather-drawer.css.ts
@@ -89,8 +99,9 @@ src/
         styles/
           replies-drawer.css.ts
           send-reply-drawer.css.ts
-        replies-drawer.tsx
-        send-reply-drawer.tsx
+        delete-popup.tsx
+        list-drawer.tsx
+        send-drawer.tsx
       user/
         styles/
           picker-drawer.css.ts
@@ -119,7 +130,9 @@ src/
       diary/
         styles/
           additional-info.css.ts
+          attachments.css.ts
         additional-info.tsx
+        attachments.tsx
         context.ts
         saving-popup.tsx
       explorer/
@@ -267,7 +280,9 @@ src/
     use-overlay.ts
   lib/
     managers/
+      attachment.ts
       diary.ts
+      file.ts
       friend.ts
       http.ts
       location.ts
@@ -322,6 +337,7 @@ src/
     reset.css.ts
     utils.css.ts
   types/
+    diary.d.ts
     props.d.ts
     response.d.ts
   App.tsx
@@ -455,6 +471,25 @@ vite.config.ts
 </svg>
 ````
 
+## File: src/binding/function/decrypt-diary.ts
+````typescript
+import { invoke } from '@tauri-apps/api/core';
+export async function decryptDiary(
+	privateKey: string,
+	encryptedData: string,
+	encryptedKey: string,
+	nonce: string,
+) {
+	const result = await invoke<DiaryData>('decrypt_diary', {
+		privateKeyPem: privateKey,
+		encryptedDataB64: encryptedData,
+		encryptedKeyB64: encryptedKey,
+		nonceB64: nonce,
+	});
+	return result;
+}
+````
+
 ## File: src/binding/function/encrypt-key-for-recipient.ts
 ````typescript
 import { invoke } from '@tauri-apps/api/core';
@@ -485,249 +520,6 @@ export async function generateKeyPair() {
 		privateKeyPem,
 		publicKeyPem,
 	};
-}
-````
-
-## File: src/components/features/reply/styles/replies-drawer.css.ts
-````typescript
-import { color } from '@/styles/color.css';
-import { uiStyle } from '@/styles/layer.css';
-export const list = uiStyle({
-	width: '100%',
-	maxHeight: 400,
-	overflowY: 'auto',
-});
-export const content = uiStyle({
-	backgroundColor: color.cream,
-	borderRadius: 16,
-});
-````
-
-## File: src/components/features/reply/styles/send-reply-drawer.css.ts
-````typescript
-import {
-	body,
-	typography,
-} from '@/components/ui/typography/styles/typography.css';
-import { weightStyles } from '@/components/ui/typography/styles/weight.css';
-import { color } from '@/styles/color.css';
-import { uiStyle } from '@/styles/layer.css';
-export const wrapper = uiStyle({
-	width: '100%',
-	height: 180,
-	backgroundColor: color.cream,
-	borderRadius: 16,
-});
-export const textArea = uiStyle([
-	typography,
-	body,
-	weightStyles.medium,
-	{
-		height: '100%',
-		':disabled': {
-			opacity: 1,
-		},
-	},
-]);
-````
-
-## File: src/components/features/reply/replies-drawer.tsx
-````typescript
-import { decryptReply } from '@/binding/function/decrypt-reply';
-import { Column } from '@/components/layout/column';
-import { Container } from '@/components/layout/container';
-import { Row } from '@/components/layout/row';
-import { Avatar } from '@/components/ui/avatar';
-import { Drawer } from '@/components/ui/drawer';
-import { DrawerTitle } from '@/components/ui/drawer/title';
-import { LoadingCircle } from '@/components/ui/loading-circle';
-import type { OverlayProps } from '@/components/ui/overlay/types';
-import { Typo } from '@/components/ui/typography';
-import { log } from '@/lib/log';
-import type { Diary, Reply } from '@/lib/managers/diary';
-import { friendManager } from '@/lib/managers/friend';
-import { apiClient } from '@/lib/managers/http';
-import { storageClient } from '@/lib/managers/storage';
-import { message } from '@tauri-apps/plugin-dialog';
-import { X } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { content, list } from './styles/replies-drawer.css';
-interface DiaryRepliesDrawerProps {
-	diary: Diary;
-}
-export function DiaryRepliesDrawer(
-	props: DiaryRepliesDrawerProps & OverlayProps,
-) {
-	const { diary, close } = props;
-	const [replies, setReplies] = useState<Array<Reply>>([]);
-	const [isLoading, setIsLoading] = useState(true);
-	useEffect(() => {
-		setIsLoading(true);
-		apiClient
-			.get<RepliesResponse>(`/replies?diaryId=${diary.shareUUID}`)
-			.then(async (replies) => {
-				const privateKey = await storageClient.get('privateKey');
-				if (!privateKey) {
-					log('error', 'Private key not found');
-					throw new Error('Private key not found');
-				}
-				const decryptedReplies = await Promise.all(
-					replies.map(async (reply) => ({
-						uuid: reply.uuid,
-						diaryId: reply.diaryId,
-						authorId: reply.authorId,
-						...(await decryptReply(
-							privateKey,
-							reply.data,
-							reply.encryptedKey,
-							reply.nonce,
-						)),
-						createdAt: new Date(reply.createdAt),
-					})),
-				);
-				setReplies(decryptedReplies);
-			})
-			.catch(async (error) => {
-				log('error', 'Failed to fetch replies', error);
-				await message(`Failed to fetch replies: ${error}`);
-				close();
-			})
-			.finally(() => {
-				setIsLoading(false);
-			});
-	}, [diary.shareUUID, close]);
-	return (
-		<Drawer close={close}>
-			<DrawerTitle>Replies</DrawerTitle>
-			{isLoading ? (
-				<Container vertical='large'>
-					<Row justify='center'>
-						<LoadingCircle />
-					</Row>
-				</Container>
-			) : (
-				<Column className={list}>
-					{replies.map((reply, i) => (
-						<Item key={i.toString()} reply={reply} />
-					))}
-				</Column>
-			)}
-		</Drawer>
-	);
-}
-interface ItemProps {
-	reply: Reply;
-}
-function Item(props: ItemProps) {
-	const { reply } = props;
-	const author = friendManager.getFriend(reply.authorId);
-	if (!author) {
-		return null;
-	}
-	return (
-		<Container>
-			<Column gap={12}>
-				<Row align='center' justify='space-between'>
-					<Row gap={6} align='center'>
-						<Avatar size={24} src={author.profileUrl} />
-						<Typo.Caption weight='medium'>{author.name}</Typo.Caption>
-					</Row>
-					<X size={20} />
-				</Row>
-				<Container className={content} vertical='regular'>
-					<Column gap={8}>
-						{reply.emoji && <Typo.Lead>{reply.emoji}</Typo.Lead>}
-						<Typo.Body>{reply.content}</Typo.Body>
-					</Column>
-				</Container>
-			</Column>
-		</Container>
-	);
-}
-````
-
-## File: src/components/features/reply/send-reply-drawer.tsx
-````typescript
-import { encryptJson } from '@/binding/function/encrypt-json';
-import { encryptKeyForRecipient } from '@/binding/function/encrypt-key-for-recipient';
-import { Column } from '@/components/layout/column';
-import { Container } from '@/components/layout/container';
-import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button/group';
-import { Drawer } from '@/components/ui/drawer';
-import { DrawerTitle } from '@/components/ui/drawer/title';
-import { EmojiInput } from '@/components/ui/input/emoji';
-import type { OverlayProps } from '@/components/ui/overlay/types';
-import { log } from '@/lib/log';
-import type { Diary } from '@/lib/managers/diary';
-import { friendManager } from '@/lib/managers/friend';
-import { apiClient } from '@/lib/managers/http';
-import { fullHeight } from '@/styles/utils.css';
-import { message } from '@tauri-apps/plugin-dialog';
-import { useCallback, useState } from 'react';
-import { textArea, wrapper } from './styles/send-reply-drawer.css';
-interface DiarySendReplyDrawerProps {
-	diary: Diary;
-}
-export function DiarySendReplyDrawer(
-	props: DiarySendReplyDrawerProps & OverlayProps,
-) {
-	const { diary, close } = props;
-	const [emoji, setEmoji] = useState('');
-	const [content, setContent] = useState('');
-	const [isSending, setIsSending] = useState(false);
-	const onClickSend = useCallback(async () => {
-		if (!content) {
-			await message('Please enter a message');
-			return;
-		}
-		const user = friendManager.getFriend(diary.sharedBy || '');
-		if (!user) {
-			await message('User not found');
-			return;
-		}
-		try {
-			setIsSending(true);
-			const [data, key, nonce] = await encryptJson({ emoji, content });
-			const encryptedKey = await encryptKeyForRecipient(user.publicKey, key);
-			await apiClient.post('/replies', {
-				diaryId: diary.uuid,
-				data,
-				nonce,
-				encryptedKey,
-			});
-			close();
-		} catch (error) {
-			log('error', 'Failed to send reply', error);
-			await message(`Failed to send reply: ${error}`);
-			return;
-		} finally {
-			setIsSending(false);
-		}
-	}, [diary, emoji, content, close]);
-	return (
-		<Drawer close={close}>
-			<DrawerTitle>Send reply</DrawerTitle>
-			<Container vertical='small'>
-				<Container className={wrapper} horizontal='regular'>
-					<Column className={fullHeight} gap={12}>
-						<EmojiInput defaultValue={emoji} onValue={setEmoji} />
-						<textarea
-							className={textArea}
-							placeholder='Write short message'
-							value={content}
-							onChange={(e) => setContent(e.target.value)}
-						/>
-					</Column>
-				</Container>
-			</Container>
-			<ButtonGroup>
-				<Button fill onClick={onClickSend} loading={isSending}>
-					Send
-				</Button>
-			</ButtonGroup>
-		</Drawer>
-	);
 }
 ````
 
@@ -940,6 +732,57 @@ export function Row(props: FlexProps) {
 }
 ````
 
+## File: src/components/pages/home/styles/friends-diaries.css.ts
+````typescript
+import { style } from '@vanilla-extract/css';
+export const center = style({
+	textAlign: 'center',
+});
+````
+
+## File: src/components/pages/my-profile/styles/image.css.ts
+````typescript
+import { color } from '@/styles/color.css';
+import { style } from '@vanilla-extract/css';
+export const avatar = style({
+	position: 'relative',
+	width: 72,
+	height: 72,
+	aspectRatio: '1 / 1',
+});
+export const edit = style({
+	position: 'absolute',
+	bottom: 0,
+	right: 0,
+	width: 28,
+	height: 28,
+	aspectRatio: '1 / 1',
+	display: 'grid',
+	placeItems: 'center',
+	backgroundColor: color.mud,
+	borderRadius: '50%',
+});
+````
+
+## File: src/components/pages/my-profile/styles/reset-confirm.css.ts
+````typescript
+import { color } from '@/styles/color.css';
+import { style } from '@vanilla-extract/css';
+export const centered = style({
+	display: 'grid',
+	placeItems: 'center',
+});
+export const iconWrapper = style([
+	centered,
+	{
+		width: 56,
+		height: 56,
+		backgroundColor: color.cream,
+		borderRadius: '50%',
+	},
+]);
+````
+
 ## File: src/components/pages/sign-up/styles/confirm-pin.css.ts
 ````typescript
 import { style } from '@vanilla-extract/css';
@@ -957,6 +800,39 @@ export const fillHeight = style({
 export const title = style({
 	textAlign: 'center',
 });
+````
+
+## File: src/components/pages/sign-up/biometric.tsx
+````typescript
+import { Column } from '@/components/layout/column';
+import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button/group';
+import { Content } from '@/components/ui/content';
+import { ScanFace } from 'lucide-react';
+import { fillHeight } from './styles/styles.css';
+interface SignUpBiometricSectionProps {
+	signUp: (biometricLogin: boolean) => void;
+}
+export function SignUpBiometricSection(props: SignUpBiometricSectionProps) {
+	const { signUp } = props;
+	return (
+		<Column className={fillHeight}>
+			<Content
+				icon={<ScanFace size={48} />}
+				title='생체 인증을 사용할까요?'
+				description='Face ID 또는 Touch ID로 앱을 이용할 수 있어요'
+			/>
+			<ButtonGroup bottomSafeAreaPadding>
+				<Button fill variant='secondary' onClick={() => signUp(false)}>
+					아니오
+				</Button>
+				<Button fill onClick={() => signUp(true)}>
+					예
+				</Button>
+			</ButtonGroup>
+		</Column>
+	);
+}
 ````
 
 ## File: src/components/pages/sign-up/confirm-pin.tsx
@@ -992,14 +868,14 @@ export function SignUpConfirmPinSection() {
 			<TopNavigator leadingArea={<GoBack />} />
 			<Column className={fillHeight}>
 				<Container className={title}>
-					<Typo.Title weight='strong'>Confirm PIN</Typo.Title>
+					<Typo.Title weight='strong'>PIN 확인</Typo.Title>
 				</Container>
 				<Container>
 					<PINInput onPin={onPin} />
 				</Container>
 				{isUnmatched && (
 					<Container className={pinUnmatched}>
-						<Typo.Body>PIN does not match</Typo.Body>
+						<Typo.Body>PIN이 일치하지 않습니다</Typo.Body>
 					</Container>
 				)}
 			</Column>
@@ -1055,12 +931,127 @@ export function SignUpSetPinSection() {
 			<TopNavigator leadingArea={<GoBack />} />
 			<Column className={fillHeight}>
 				<Container className={title}>
-					<Typo.Title weight='strong'>Set PIN</Typo.Title>
+					<Typo.Title weight='strong'>PIN 설정</Typo.Title>
 				</Container>
 				<Container>
 					<PINInput onPin={onPin} />
 				</Container>
 			</Column>
+		</Column>
+	);
+}
+````
+
+## File: src/components/ui/button/styles/button.css.ts
+````typescript
+import { color } from '@/styles/color.css';
+import { uiStyle } from '@/styles/layer.css';
+export const button = uiStyle({
+	width: 'auto',
+	display: 'flex',
+	justifyContent: 'center',
+	padding: 16,
+	borderRadius: 16,
+	userSelect: 'none',
+	WebkitUserModify: 'read-only',
+	WebkitUserSelect: 'none',
+	transition: 'transform 0.2s ease, filter 0.2s ease',
+	':active': {
+		transform: 'scale(0.98)',
+		filter: 'brightness(0.9)',
+	},
+	':disabled': {
+		cursor: 'not-allowed',
+		filter: 'brightness(0.85)',
+		opacity: 0.6,
+	},
+});
+export const variantStyles = {
+	primary: uiStyle({
+		backgroundColor: color.mud,
+		color: color.milk,
+	}),
+	secondary: uiStyle({
+		backgroundColor: color.cream,
+	}),
+	text: uiStyle({
+		backgroundColor: 'transparent',
+	}),
+};
+export const fillStyle = uiStyle({
+	width: '100%',
+});
+````
+
+## File: src/components/ui/button/index.tsx
+````typescript
+import { cn } from '@/lib/common';
+import type { ButtonHTMLAttributes } from 'react';
+import { LoadingCircle } from '../loading-circle';
+import { Typo } from '../typography';
+import { button, fillStyle, variantStyles } from './styles/button.css';
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+	variant?: ButtonVariant;
+	fill?: boolean;
+	loading?: boolean;
+}
+type ButtonVariant = 'primary' | 'secondary' | 'text';
+export function Button(props: ButtonProps) {
+	const {
+		variant = 'primary',
+		fill = false,
+		loading = false,
+		disabled = loading,
+		className,
+		children,
+		...rest
+	} = props;
+	const classNames = [
+		button,
+		variantStyles[variant],
+		className,
+		{ [fillStyle]: fill },
+	];
+	return (
+		<button {...rest} className={cn(classNames)} disabled={disabled}>
+			<Typo.Body weight={variant === 'text' ? 'medium' : 'strong'}>
+				{loading ? <LoadingCircle size={20} /> : children}
+			</Typo.Body>
+		</button>
+	);
+}
+````
+
+## File: src/components/ui/content/index.tsx
+````typescript
+import { Column } from '@/components/layout/column';
+import { Container } from '@/components/layout/container';
+import { Typo } from '../typography';
+import { content, iconStyle } from './styles.css';
+interface ContentProps {
+	icon?: React.ReactNode;
+	title?: string;
+	description?: string;
+}
+export function Content(props: ContentProps) {
+	const { icon, title, description } = props;
+	return (
+		<Column className={content} align='center'>
+			{icon && (
+				<Container vertical='small' horizontal='none'>
+					<div className={iconStyle}>{icon}</div>
+				</Container>
+			)}
+			{title && (
+				<Container vertical='small' horizontal='none'>
+					<Typo.Title weight='strong'>{title}</Typo.Title>
+				</Container>
+			)}
+			{description && (
+				<Container vertical='small' horizontal='none'>
+					<Typo.Body>{description}</Typo.Body>
+				</Container>
+			)}
 		</Column>
 	);
 }
@@ -1101,6 +1092,22 @@ export const divider = uiStyle({
 	height: 6,
 	backgroundColor: color.cream,
 });
+````
+
+## File: src/components/ui/drawer/animation.ts
+````typescript
+import { getTransition } from '@/lib/animation';
+import type { Variants } from 'motion/react';
+export const drawerVariants: Variants = {
+	hidden: {
+		y: '100%',
+		transition: getTransition(0.35),
+	},
+	visible: {
+		y: 0,
+		transition: getTransition(0.35),
+	},
+};
 ````
 
 ## File: src/components/ui/flow/context.ts
@@ -1334,6 +1341,77 @@ function PINItem(props: PINItemProps) {
 }
 ````
 
+## File: src/components/ui/loading-circle/index.tsx
+````typescript
+import { LoaderCircle } from 'lucide-react';
+import { loaderCircle, wrapper } from './styles.css';
+interface LoadingCircleProps {
+	size?: number;
+}
+export function LoadingCircle(props: LoadingCircleProps) {
+	const { size = 24 } = props;
+	return (
+		<div style={{ width: size, height: size }} className={wrapper}>
+			<LoaderCircle className={loaderCircle} size={size} />
+		</div>
+	);
+}
+````
+
+## File: src/components/ui/loading-circle/styles.css.ts
+````typescript
+import { uiStyle } from '@/styles/layer.css';
+import { keyframes } from '@vanilla-extract/css';
+const loading = keyframes({
+	'0%': {
+		transform: 'rotate(0deg)',
+	},
+	'100%': {
+		transform: 'rotate(360deg)',
+	},
+});
+export const wrapper = uiStyle({});
+export const loaderCircle = uiStyle({
+	aspectRatio: '1 / 1',
+	animation: `${loading} 1s linear infinite`,
+});
+````
+
+## File: src/components/ui/overlay/styles/backdrop.css.ts
+````typescript
+import { style } from '@vanilla-extract/css';
+export const backdrop = style({
+	position: 'fixed',
+	width: '100%',
+	height: '100vh',
+	top: 0,
+	left: 0,
+	backgroundColor: 'rgba(0, 0, 0, 0.25)',
+});
+````
+
+## File: src/components/ui/overlay/styles/root.css.ts
+````typescript
+import { resetGlobalStyle } from '@/styles/layer.css';
+resetGlobalStyle('#overlay-root', {
+	position: 'fixed',
+	top: 0,
+	left: 0,
+	zIndex: 1000,
+});
+````
+
+## File: src/components/ui/overlay/context.ts
+````typescript
+import { type Dispatch, type SetStateAction, createContext } from 'react';
+import type { OverlayContent } from './types';
+type OverlayContextType = {
+	contents: Array<OverlayContent>;
+	setContents: Dispatch<SetStateAction<Array<OverlayContent>>>;
+};
+export const OverlayContext = createContext({} as OverlayContextType);
+````
+
 ## File: src/components/ui/sotto-symbol/index.tsx
 ````typescript
 interface SymbolProps {
@@ -1394,6 +1472,30 @@ type TabsContextType = {
 	setCurrentValue: (value: string) => unknown;
 };
 export const TabsContext = createContext({} as TabsContextType);
+````
+
+## File: src/components/ui/tabs/index.tsx
+````typescript
+import type { BaseProps, HAS_CHILDREN } from '@/types/props';
+import { useQueryState } from 'nuqs';
+import { TabsContext } from './context';
+interface TabsProps extends BaseProps<HAS_CHILDREN> {
+	defaultValue?: string;
+}
+export function Tabs(props: TabsProps) {
+	const { defaultValue, children } = props;
+	const [currentValue, setCurrentValue] = useQueryState('tab');
+	return (
+		<TabsContext
+			value={{
+				currentValue: currentValue || defaultValue || null,
+				setCurrentValue,
+			}}
+		>
+			{children}
+		</TabsContext>
+	);
+}
 ````
 
 ## File: src/components/ui/tabs/item.tsx
@@ -1745,6 +1847,44 @@ export function calculateScaleFactor(size: number) {
 }
 ````
 
+## File: src/routes/diary/page.css.ts
+````typescript
+import {
+	body,
+	title,
+	typography,
+} from '@/components/ui/typography/styles/typography.css';
+import { weightStyles } from '@/components/ui/typography/styles/weight.css';
+import { style } from '@vanilla-extract/css';
+export const page = style({
+	height: '100%',
+});
+export const titleInput = style([
+	typography,
+	title,
+	weightStyles.strong,
+	{
+		':disabled': {
+			opacity: 1,
+		},
+	},
+]);
+export const textAreaContainer = style({
+	height: '100%',
+});
+export const textArea = style([
+	typography,
+	body,
+	weightStyles.medium,
+	{
+		height: '100%',
+		':disabled': {
+			opacity: 1,
+		},
+	},
+]);
+````
+
 ## File: src/routes/home/page.css.ts
 ````typescript
 import { style } from '@vanilla-extract/css';
@@ -1757,6 +1897,66 @@ export const right = style({
 export const banWarning = style({
 	opacity: 0.7,
 	lineHeight: 1.5,
+});
+````
+
+## File: src/routes/index/index.tsx
+````typescript
+import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button/group';
+import { LoadingCircle } from '@/components/ui/loading-circle';
+import { SottoSymbol } from '@/components/ui/sotto-symbol';
+import { Typo } from '@/components/ui/typography';
+import { wait } from '@/lib/common';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { centerSymbol } from './page.css';
+export default function IndexPage() {
+	const [showSignUp, setShowSignUp] = useState(false);
+	const navigate = useNavigate();
+	const startApp = useCallback(async () => {
+		await wait(500);
+		if (localStorage.getItem('app-initialized') === 'true') {
+			setShowSignUp(false);
+		} else {
+			setShowSignUp(true);
+			return;
+		}
+		if (localStorage.getItem('useBiometricLogin') === 'true') {
+			navigate('/sign-in/biometric');
+		} else {
+			navigate('/sign-in/pin');
+		}
+	}, [navigate]);
+	useEffect(() => {
+		startApp();
+	}, [startApp]);
+	return (
+		<>
+			<SottoSymbol className={centerSymbol} size={84} />
+			<ButtonGroup direction='vertical' float>
+				{import.meta.env.DEV && <Typo.Body>{import.meta.env.MODE}</Typo.Body>}
+				{showSignUp ? (
+					<Link to='/sign-up'>
+						<Button fill>회원가입</Button>
+					</Link>
+				) : (
+					<LoadingCircle size={32} />
+				)}
+			</ButtonGroup>
+		</>
+	);
+}
+````
+
+## File: src/routes/index/page.css.ts
+````typescript
+import { style } from '@vanilla-extract/css';
+export const centerSymbol = style({
+	position: 'fixed',
+	top: '50%',
+	left: '50%',
+	transform: 'translate(-50%, -50%)',
 });
 ````
 
@@ -1784,6 +1984,14 @@ export const { style: layoutStyle, globalStyle: layoutGlobalStyle } =
 	getLayerApplier(layoutLayer);
 export const { style: uiStyle, globalStyle: uiGlobalStyle } =
 	getLayerApplier(uiLayer);
+````
+
+## File: src/styles/utils.css.ts
+````typescript
+import { style } from '@vanilla-extract/css';
+export const fullHeight = style({
+	height: '100%',
+});
 ````
 
 ## File: src/types/props.d.ts
@@ -1814,6 +2022,46 @@ export interface BaseProps<CHILDREN extends boolean = false> {
 ## File: src-tauri/gen/android/app/build/intermediates/dex_number_of_buckets_file/arm64Debug/dexBuilderArm64Debug/out
 ````
 7
+````
+
+## File: src-tauri/gen/android/app/src/main/AndroidManifest.xml
+````xml
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- AndroidTV support -->
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <application
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.sotto_app"
+        android:usesCleartextTraffic="${usesCleartextTraffic}"
+        tools:replace="android:theme">
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+            android:launchMode="singleTask"
+            android:label="@string/main_activity_title"
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <!-- AndroidTV support -->
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <provider
+          android:name="androidx.core.content.FileProvider"
+          android:authorities="${applicationId}.fileprovider"
+          android:exported="false"
+          android:grantUriPermissions="true">
+          <meta-data
+            android:name="android.support.FILE_PROVIDER_PATHS"
+            android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+</manifest>
 ````
 
 ## File: src-tauri/gen/android/app/.gitignore
@@ -3150,6 +3398,47 @@ fn main() {
 }
 ````
 
+## File: biome.json
+````json
+{
+	"$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"files": {
+		"ignoreUnknown": true,
+		"ignore": ["src-tauri/"]
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab"
+	},
+	"organizeImports": {
+		"enabled": true
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": true,
+			"a11y": {
+				"useKeyWithClickEvents": "off"
+			},
+			"correctness": {
+				"noUnusedImports": "error"
+			}
+		}
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "single",
+			"jsxQuoteStyle": "single"
+		}
+	}
+}
+````
+
 ## File: tsconfig.json
 ````json
 {
@@ -3192,16 +3481,16 @@ fn main() {
 }
 ````
 
-## File: src/binding/function/decrypt-diary.ts
+## File: src/binding/function/decrypt-data.ts
 ````typescript
 import { invoke } from '@tauri-apps/api/core';
-export async function decryptDiary(
+export async function decryptData(
 	privateKey: string,
 	encryptedData: string,
 	encryptedKey: string,
 	nonce: string,
 ) {
-	const result = await invoke<DiaryData>('decrypt_diary', {
+	const result = await invoke<string>('decrypt_data', {
 		privateKeyPem: privateKey,
 		encryptedDataB64: encryptedData,
 		encryptedKeyB64: encryptedKey,
@@ -3230,24 +3519,32 @@ export async function decryptReply(
 }
 ````
 
-## File: src/binding/function/encrypt-json.ts
+## File: src/binding/function/generate-aes-key.ts
 ````typescript
 import { invoke } from '@tauri-apps/api/core';
-/**
- * ```rust
- * BASE64_STANDARD.encode(&encrypted_data)
- * BASE64_STANDARD.encode(&aes_key)
- * BASE64_STANDARD.encode(&nonce_bytes)
- * ```
- */
-type EncryptResult = [string, string, string];
-export async function encryptJson(data: string | object, prevAesKey?: string) {
-	const json = typeof data === 'string' ? data : JSON.stringify(data);
-	const result = await invoke<EncryptResult>('encrypt_json', {
-		json,
-		prevAesKey,
-	});
+export async function generateAesKey() {
+	const result = await invoke<string>('generate_aes_key');
 	return result;
+}
+````
+
+## File: src/binding/types/attachment.d.ts
+````typescript
+interface Attachment {
+	local_id: string;
+	remote_url?: string;
+}
+````
+
+## File: src/binding/types/diary-data.d.ts
+````typescript
+interface DiaryData {
+	emoji: string;
+	title: string;
+	content: string;
+	location?: string;
+	weather?: string;
+	attachments: Array<string>;
 }
 ````
 
@@ -3256,6 +3553,49 @@ export async function encryptJson(data: string | object, prevAesKey?: string) {
 interface ReplyData {
 	emoji: string;
 	content: string;
+}
+````
+
+## File: src/components/features/attachment/delete-popup.tsx
+````typescript
+import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button/group';
+import type { OverlayProps } from '@/components/ui/overlay/types';
+import { Popup } from '@/components/ui/popup';
+import { PopupContent } from '@/components/ui/popup/content';
+import { TriangleAlert } from 'lucide-react';
+import { useCallback } from 'react';
+interface AttachmentDeletePopupProps {
+	handleDelete: () => unknown;
+}
+export function AttachmentDeletePopup(
+	props: AttachmentDeletePopupProps & OverlayProps,
+) {
+	const { handleDelete, close } = props;
+	const onClickDelete = useCallback(() => {
+		try {
+			handleDelete();
+		} finally {
+			close();
+		}
+	}, [handleDelete, close]);
+	return (
+		<Popup>
+			<PopupContent
+				icon={<TriangleAlert />}
+				title='첨부파일을 삭제할까요?'
+				description='이 작업은 되돌릴 수 없어요.'
+			/>
+			<ButtonGroup smallPadding>
+				<Button fill onClick={onClickDelete}>
+					삭제
+				</Button>
+				<Button fill variant='secondary' onClick={close}>
+					취소
+				</Button>
+			</ButtonGroup>
+		</Popup>
+	);
 }
 ````
 
@@ -3329,7 +3669,7 @@ export function AuthBiometricPopup(props: AuthPopupProps) {
 			</Column>
 			<ButtonGroup smallPadding>
 				<Button fill variant='secondary' onClick={openAlternative}>
-					Use PIN instead
+					PIN 인증하기
 				</Button>
 			</ButtonGroup>
 		</Popup>
@@ -3363,7 +3703,7 @@ export function AuthPINPopup(props: AuthPopupProps) {
 					throw new Error('PIN not found');
 				}
 				if (pin !== savedPin) {
-					await message('Invalid PIN', { kind: 'error' });
+					await message('올바르지 않은 PIN', { kind: 'error' });
 					return;
 				}
 				try {
@@ -3381,7 +3721,7 @@ export function AuthPINPopup(props: AuthPopupProps) {
 		<Popup className={popup}>
 			<Container vertical='regular'>
 				<Column align='center'>
-					<Typo.Lead weight='strong'>Enter your PIN</Typo.Lead>
+					<Typo.Lead weight='strong'>PIN 입력</Typo.Lead>
 				</Column>
 			</Container>
 			<Container>
@@ -3391,7 +3731,7 @@ export function AuthPINPopup(props: AuthPopupProps) {
 			</Container>
 			<ButtonGroup smallPadding>
 				<Button fill variant='secondary' onClick={openAlternative}>
-					Use biometric instead
+					생체 인증하기
 				</Button>
 			</ButtonGroup>
 		</Popup>
@@ -3432,6 +3772,15 @@ export const preview = uiStyle([
 ]);
 ````
 
+## File: src/components/features/diary/styles/in-date-drawer.css.ts
+````typescript
+import { uiStyle } from '@/styles/layer.css';
+export const list = uiStyle({
+	maxHeight: 504,
+	overflowY: 'auto',
+});
+````
+
 ## File: src/components/features/diary/styles/location-drawer.css.ts
 ````typescript
 import { color } from '@/styles/color.css';
@@ -3469,106 +3818,6 @@ export const item = uiStyle({
 });
 ````
 
-## File: src/components/features/diary/detail-drawer.tsx
-````typescript
-import { Column } from '@/components/layout/column';
-import { Container } from '@/components/layout/container';
-import { Row } from '@/components/layout/row';
-import { Drawer } from '@/components/ui/drawer';
-import type { OverlayProps } from '@/components/ui/overlay/types';
-import { Typo } from '@/components/ui/typography';
-import { calculateDiffDays } from '@/lib/common';
-import type { Diary } from '@/lib/managers/diary';
-import type { BaseProps, HAS_CHILDREN } from '@/types/props';
-import {
-	card,
-	preventOverflow,
-	preview,
-	title,
-} from './styles/detail-drawer.css';
-interface DiaryDetailDrawerProps extends BaseProps<HAS_CHILDREN> {
-	diary: Diary;
-}
-export function DiaryDetailDrawer(
-	props: DiaryDetailDrawerProps & OverlayProps,
-) {
-	const { diary, children, close } = props;
-	const diffDays = calculateDiffDays(new Date(diary.createdAt));
-	return (
-		<Drawer close={close}>
-			<Container vertical='small'>
-				<Container className={card}>
-					<Row>
-						<Column
-							className={preventOverflow}
-							gap={6}
-							justify='end'
-							align='start'
-						>
-							<Typo.Lead>{diary.emoji}</Typo.Lead>
-							<Column className={preventOverflow} gap={2} align='start'>
-								<Typo.Body className={title} weight='strong'>
-									{diary.title || 'Untitled'}
-								</Typo.Body>
-								<Typo.Caption className={preview}>
-									{diary.content.split('\n')[0].trim() || 'No content yet :('}
-								</Typo.Caption>
-							</Column>
-						</Column>
-						<Typo.Caption>
-							{diffDays === 0
-								? 'Today'
-								: diffDays === 1
-									? 'Yesterday'
-									: `${diffDays} days ago`}
-						</Typo.Caption>
-					</Row>
-				</Container>
-			</Container>
-			{children}
-		</Drawer>
-	);
-}
-````
-
-## File: src/components/features/diary/in-date-drawer.tsx
-````typescript
-import { Container } from '@/components/layout/container';
-import { Grid } from '@/components/layout/grid';
-import { Row } from '@/components/layout/row';
-import { DiaryCard } from '@/components/ui/card/diary';
-import { Drawer } from '@/components/ui/drawer';
-import type { OverlayProps } from '@/components/ui/overlay/types';
-import { Typo } from '@/components/ui/typography';
-import type { Diary } from '@/lib/managers/diary';
-import type { Dayjs } from 'dayjs';
-interface DiaryInDateDrawerProps {
-	day: Dayjs;
-	diaries: Array<Diary>;
-}
-export function DiaryInDateDrawer(
-	props: DiaryInDateDrawerProps & OverlayProps,
-) {
-	const { day, diaries, close } = props;
-	return (
-		<Drawer close={close}>
-			<Container vertical='small'>
-				<Row justify='center'>
-					<Typo.Body weight='strong'>{day.format('MMMM DD, YYYY')}</Typo.Body>
-				</Row>
-			</Container>
-			<Container>
-				<Grid>
-					{diaries.map((d) => (
-						<DiaryCard key={d.uuid} diary={d} />
-					))}
-				</Grid>
-			</Container>
-		</Drawer>
-	);
-}
-````
-
 ## File: src/components/features/diary/stop-url-sharing-popup.tsx
 ````typescript
 import { Button } from '@/components/ui/button';
@@ -3596,42 +3845,15 @@ export function DiaryStopURLSharingPopup(
 		<Popup>
 			<PopupContent
 				icon={<TriangleAlert />}
-				title='Stop URL sharing?'
-				description='Existing URL will be useless and cannot undo'
+				title='URL 공유를 중지할까요?'
+				description='기존 URL은 더 이상 사용할 수 없으며 되돌릴 수 없어요'
 			/>
 			<ButtonGroup smallPadding>
 				<Button fill onClick={onClickStop}>
-					Stop
+					중지
 				</Button>
 				<Button fill variant='secondary' onClick={close}>
-					Cancel
-				</Button>
-			</ButtonGroup>
-		</Popup>
-	);
-}
-````
-
-## File: src/components/features/diary/url-copied-popup.tsx
-````typescript
-import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button/group';
-import type { OverlayProps } from '@/components/ui/overlay/types';
-import { Popup } from '@/components/ui/popup';
-import { PopupContent } from '@/components/ui/popup/content';
-import { ClipboardCheck } from 'lucide-react';
-export function DiaryURLCopiedPopup(props: OverlayProps) {
-	const { close } = props;
-	return (
-		<Popup>
-			<PopupContent
-				icon={<ClipboardCheck />}
-				title='URL Copied to clipboard'
-				description='Anyone have URL can see this diary'
-			/>
-			<ButtonGroup smallPadding>
-				<Button fill onClick={close}>
-					OK
+					취소
 				</Button>
 			</ButtonGroup>
 		</Popup>
@@ -3658,34 +3880,30 @@ export function LocationAliasAddDrawer(props: OverlayProps) {
 	const [address, setAddress] = useState('');
 	const onClickAdd = useCallback(async () => {
 		if (!name || !address) {
-			await message('Please fill in all fields.');
+			await message('모든 항목을 입력해 주세요.');
 			return;
 		}
 		try {
 			await locationManager.addAlias(name, address);
 		} catch (error) {
 			log('error', 'Failed to add alias:', error);
-			await message('Failed to add alias.');
+			await message('별칭 추가에 실패했어요.');
 		} finally {
 			close();
 		}
 	}, [name, address, close]);
 	return (
 		<Drawer close={close}>
-			<DrawerTitle>Add other alias</DrawerTitle>
-			<InputField label='Name'>
-				<Input placeholder='Enter name' value={name} onValue={setName} />
+			<DrawerTitle>다른 별칭 추가</DrawerTitle>
+			<InputField label='이름'>
+				<Input placeholder='이름 입력' value={name} onValue={setName} />
 			</InputField>
-			<InputField label='Address'>
-				<Input
-					placeholder='Enter address'
-					value={address}
-					onValue={setAddress}
-				/>
+			<InputField label='주소'>
+				<Input placeholder='주소 입력' value={address} onValue={setAddress} />
 			</InputField>
 			<ButtonGroup>
 				<Button fill onClick={onClickAdd}>
-					Add
+					추가
 				</Button>
 			</ButtonGroup>
 		</Drawer>
@@ -3717,7 +3935,7 @@ export function LocationAliasDeleteConfirmPopup(
 			await locationManager.deleteAlias(alias.uuid);
 		} catch (error) {
 			log('error', 'Failed to delete alias:', error);
-			await message('Failed to delete alias.');
+			await message('별칭 삭제에 실패했어요.');
 			return;
 		} finally {
 			close();
@@ -3727,15 +3945,15 @@ export function LocationAliasDeleteConfirmPopup(
 		<Popup>
 			<PopupContent
 				icon={<TriangleAlert />}
-				title={`Delete "${alias.name}"?`}
-				description='This action cannot be undo.'
+				title={`\"${alias.name}\"을(를) 삭제할까요?`}
+				description='이 작업은 되돌릴 수 없어요.'
 			/>
 			<ButtonGroup smallPadding>
 				<Button fill onClick={onClickDelete}>
-					Delete
+					삭제
 				</Button>
 				<Button fill variant='secondary' onClick={close}>
-					Cancel
+					취소
 				</Button>
 			</ButtonGroup>
 		</Popup>
@@ -3767,34 +3985,32 @@ export function LocationAliasEditDrawer(
 	const [address, setAddress] = useState(alias.address);
 	const onClickApply = useCallback(async () => {
 		if (!name || !address) {
-			await message('Please fill in all fields.');
+			await message('모든 항목을 입력해 주세요.');
 			return;
 		}
 		try {
 			await locationManager.updateAlias(alias.uuid, { name, address });
 		} catch (error) {
 			log('error', 'Failed to edit alias:', error);
-			await message('Failed to edit alias.');
+			await message('별칭 수정에 실패했어요.');
 		} finally {
 			close();
 		}
 	}, [alias.uuid, name, address, close]);
 	return (
 		<Drawer close={close}>
-			<DrawerTitle>Edit {alias.name ? `"${alias.name}"` : 'alias'}</DrawerTitle>
-			<InputField label='Name'>
-				<Input placeholder='Enter name' value={name} onValue={setName} />
+			<DrawerTitle>
+				{alias.name ? `"${alias.name}" 수정` : '별칭 수정'}
+			</DrawerTitle>
+			<InputField label='이름'>
+				<Input placeholder='이름 입력' value={name} onValue={setName} />
 			</InputField>
-			<InputField label='Address'>
-				<Input
-					placeholder='Enter address'
-					value={address}
-					onValue={setAddress}
-				/>
+			<InputField label='주소'>
+				<Input placeholder='주소 입력' value={address} onValue={setAddress} />
 			</InputField>
 			<ButtonGroup>
 				<Button fill onClick={onClickApply}>
-					Apply
+					적용
 				</Button>
 			</ButtonGroup>
 		</Drawer>
@@ -3827,13 +4043,13 @@ export function LocationPresetsAddDrawer(
 	const [address, setAddress] = useState('');
 	const onClickAdd = useCallback(async () => {
 		if (!address.trim()) {
-			await message('Please enter a valid address.');
+			await message('유효한 주소를 입력해 주세요.');
 			return;
 		}
 		try {
 			await locationManager.setPreset(name, address);
 		} catch (error) {
-			await message('Failed to add preset');
+			await message('프리셋 추가에 실패했어요');
 			return;
 		} finally {
 			close();
@@ -3842,17 +4058,13 @@ export function LocationPresetsAddDrawer(
 	}, [address, close, name]);
 	return (
 		<Drawer close={close}>
-			<DrawerTitle>Add "{locationManager.getPresetName(name)}"</DrawerTitle>
+			<DrawerTitle>"{locationManager.getPresetName(name)}" 추가</DrawerTitle>
 			<InputField>
-				<Input
-					placeholder='Enter address'
-					value={address}
-					onValue={setAddress}
-				/>
+				<Input placeholder='주소 입력' value={address} onValue={setAddress} />
 			</InputField>
 			<ButtonGroup>
 				<Button fill onClick={onClickAdd}>
-					Add
+					추가
 				</Button>
 			</ButtonGroup>
 		</Drawer>
@@ -3893,15 +4105,15 @@ export function LocationPresetsResetConfirmPopup(
 		<Popup>
 			<PopupContent
 				icon={<TriangleAlert />}
-				title={`Reset "${locationManager.getPresetName(name)}"?`}
-				description='This action cannot be undo.'
+				title={`\"${locationManager.getPresetName(name)}\"를 초기화할까요?`}
+				description='이 작업은 되돌릴 수 없어요.'
 			/>
 			<ButtonGroup smallPadding direction='horizontal'>
 				<Button fill onClick={onClickReset}>
-					Reset
+					초기화
 				</Button>
 				<Button fill variant='secondary' onClick={onClickCancel}>
-					Cancel
+					취소
 				</Button>
 			</ButtonGroup>
 		</Popup>
@@ -3909,16 +4121,68 @@ export function LocationPresetsResetConfirmPopup(
 }
 ````
 
-## File: src/components/pages/diary/context.ts
+## File: src/components/features/reply/styles/replies-drawer.css.ts
 ````typescript
-import type { useDiary } from '@/hooks/use-diary';
-import type { Diary } from '@/lib/managers/diary';
-import { createContext } from 'react';
-type DiaryContextType = {
-	diary: Diary;
-	diaryDispatch: ReturnType<typeof useDiary>[1];
-};
-export const DiaryContext = createContext({} as DiaryContextType);
+import { color } from '@/styles/color.css';
+import { uiStyle } from '@/styles/layer.css';
+export const list = uiStyle({
+	width: '100%',
+	maxHeight: 400,
+	overflowY: 'auto',
+});
+export const content = uiStyle({
+	backgroundColor: color.cream,
+	borderRadius: 16,
+});
+````
+
+## File: src/components/features/reply/styles/send-reply-drawer.css.ts
+````typescript
+import {
+	body,
+	typography,
+} from '@/components/ui/typography/styles/typography.css';
+import { weightStyles } from '@/components/ui/typography/styles/weight.css';
+import { color } from '@/styles/color.css';
+import { uiStyle } from '@/styles/layer.css';
+export const wrapper = uiStyle({
+	width: '100%',
+	height: 180,
+	backgroundColor: color.cream,
+	borderRadius: 16,
+});
+export const textArea = uiStyle([
+	typography,
+	body,
+	weightStyles.medium,
+	{
+		height: '100%',
+		':disabled': {
+			opacity: 1,
+		},
+	},
+]);
+````
+
+## File: src/components/pages/diary/saving-popup.tsx
+````typescript
+import { Column } from '@/components/layout/column';
+import { Container } from '@/components/layout/container';
+import { LoadingCircle } from '@/components/ui/loading-circle';
+import { Popup } from '@/components/ui/popup';
+import { Typo } from '@/components/ui/typography';
+export function DiarySavingPopup() {
+	return (
+		<Popup fill={false}>
+			<Container vertical='small'>
+				<Column align='center' gap={12}>
+					<LoadingCircle size={48} />
+					<Typo.Body>저장중</Typo.Body>
+				</Column>
+			</Container>
+		</Popup>
+	);
+}
 ````
 
 ## File: src/components/pages/explorer/location-alias/styles/presets.css.ts
@@ -3954,7 +4218,7 @@ export function ExplorerLocationAliasOthers() {
 	const aliases = locationManager.getAliases();
 	return (
 		<>
-			<CompactListTitle title='Others' />
+			<CompactListTitle title='기타' />
 			{aliases.map((a) => (
 				<Item key={a.uuid} alias={a} />
 			))}
@@ -4002,110 +4266,6 @@ export const list = style({
 });
 ````
 
-## File: src/components/pages/home/my-diaries/views/list.tsx
-````typescript
-import { Container } from '@/components/layout/container';
-import { Grid } from '@/components/layout/grid';
-import { DiaryCard } from '@/components/ui/card/diary';
-import { Content } from '@/components/ui/content';
-import { diaryManager } from '@/lib/managers/diary';
-import { fullHeight } from '@/styles/utils.css';
-import { BookDashed } from 'lucide-react';
-import { useMemo } from 'react';
-export function HomeMyDiariesList() {
-	const diaries = useMemo(() => diaryManager.getDiaries(), []);
-	return (
-		<Container className={fullHeight}>
-			{diaries.length > 0 ? (
-				<Grid>
-					{diaries.map((diary) => (
-						<DiaryCard key={diary.uuid} diary={diary} />
-					))}
-				</Grid>
-			) : (
-				<Content
-					icon={<BookDashed size={48} />}
-					description='Press “New Diary” to begin your story'
-				/>
-			)}
-		</Container>
-	);
-}
-````
-
-## File: src/components/pages/home/my-diaries/drawer.tsx
-````typescript
-import { DeleteDiaryPopup } from '@/components/features/diary/delete-popup';
-import { DiaryDetailDrawer } from '@/components/features/diary/detail-drawer';
-import { Container } from '@/components/layout/container';
-import { AvatarItem } from '@/components/ui/avatar/item';
-import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button/group';
-import type { OverlayProps } from '@/components/ui/overlay/types';
-import { Typo } from '@/components/ui/typography';
-import { useOverlay } from '@/hooks/use-overlay';
-import { log } from '@/lib/log';
-import { type Diary, diaryManager } from '@/lib/managers/diary';
-import { friendManager } from '@/lib/managers/friend';
-import { message } from '@tauri-apps/plugin-dialog';
-import { useCallback } from 'react';
-import { list } from './styles/my-diary-drawer.css';
-interface HomeMyDiaryDrawerProps {
-	diary: Diary;
-	onDelete?: () => void;
-}
-export function HomeMyDiaryDrawer(
-	props: HomeMyDiaryDrawerProps & OverlayProps,
-) {
-	const { diary, onDelete, close } = props;
-	const { show: openDelete } = useOverlay(DeleteDiaryPopup);
-	const onClickCancelSharing = useCallback(async () => {
-		try {
-			await diaryManager.shareDiary(diary.uuid, []);
-		} catch (error) {
-			log('error', 'Fail to cancel sharing diary', error);
-			await message('Failed to cancel sharing the diary.');
-		} finally {
-			close();
-		}
-	}, [diary, close]);
-	const onClickDelete = useCallback(() => {
-		openDelete({ diary, callback: onDelete || (() => {}) });
-	}, [diary, openDelete, onDelete]);
-	return (
-		<DiaryDetailDrawer diary={diary} close={close}>
-			{diary.sharedWith.length > 0 && (
-				<Container vertical='small' horizontal='none'>
-					<Container vertical='small'>
-						<Typo.Body weight='medium'>
-							Shared with {diary.sharedWith.length.toLocaleString()} friend
-							{diary.sharedWith.length > 1 ? 's' : ''}
-						</Typo.Body>
-					</Container>
-					<div className={list}>
-						{diary.sharedWith.map((uuid) => {
-							const friend = friendManager.getFriend(uuid);
-							if (!friend) return null;
-							return <AvatarItem key={friend.uuid} user={friend} selected />;
-						})}
-					</div>
-				</Container>
-			)}
-			<ButtonGroup>
-				{diary.sharedWith.length > 0 && (
-					<Button fill variant='secondary' onClick={onClickCancelSharing}>
-						Cancel sharing
-					</Button>
-				)}
-				<Button fill onClick={onClickDelete}>
-					Delete diary
-				</Button>
-			</ButtonGroup>
-		</DiaryDetailDrawer>
-	);
-}
-````
-
 ## File: src/components/pages/home/styles/bottom-navigator.css.ts
 ````typescript
 import { color } from '@/styles/color.css';
@@ -4138,114 +4298,6 @@ export const viewButtonActive = style({
 });
 ````
 
-## File: src/components/pages/home/styles/friends-diaries.css.ts
-````typescript
-import { style } from '@vanilla-extract/css';
-export const center = style({
-	textAlign: 'center',
-});
-````
-
-## File: src/components/pages/home/friend-diary-drawer.tsx
-````typescript
-import { DiaryDetailDrawer } from '@/components/features/diary/detail-drawer';
-import { BanFriendDrawer } from '@/components/features/user/ban-drawer';
-import { Container } from '@/components/layout/container';
-import { Row } from '@/components/layout/row';
-import { Avatar } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button/group';
-import type { OverlayProps } from '@/components/ui/overlay/types';
-import { Typo } from '@/components/ui/typography';
-import { useOverlay } from '@/hooks/use-overlay';
-import type { Diary } from '@/lib/managers/diary';
-import { friendManager } from '@/lib/managers/friend';
-import { useCallback } from 'react';
-interface HomeFriendDiaryDrawerProps {
-	diary: Diary;
-	onDelete?: () => void;
-}
-export function HomeFriendDiaryDrawer(
-	props: HomeFriendDiaryDrawerProps & OverlayProps,
-) {
-	const { diary, onDelete, close } = props;
-	const friend = friendManager.getFriend(diary?.sharedBy || '');
-	const { show: openBanFriend } = useOverlay(BanFriendDrawer);
-	const onClickDelete = useCallback(() => {
-		if (friend) {
-			openBanFriend({
-				friend,
-				callback: () => {
-					onDelete?.();
-					close();
-				},
-			});
-		}
-	}, [friend, openBanFriend, onDelete, close]);
-	if (!friend) {
-		return null;
-	}
-	return (
-		<DiaryDetailDrawer diary={diary} close={close}>
-			<Container horizontal='large'>
-				<Row gap={8} align='center' justify='start'>
-					<Avatar size={32} />
-					<Typo.Body weight='medium'>Shared by {friend.name}</Typo.Body>
-				</Row>
-			</Container>
-			<ButtonGroup>
-				<Button fill onClick={onClickDelete}>
-					Block “{friend.name}”
-				</Button>
-			</ButtonGroup>
-		</DiaryDetailDrawer>
-	);
-}
-````
-
-## File: src/components/pages/my-profile/styles/image.css.ts
-````typescript
-import { color } from '@/styles/color.css';
-import { style } from '@vanilla-extract/css';
-export const avatar = style({
-	position: 'relative',
-	width: 72,
-	height: 72,
-	aspectRatio: '1 / 1',
-});
-export const edit = style({
-	position: 'absolute',
-	bottom: 0,
-	right: 0,
-	width: 28,
-	height: 28,
-	aspectRatio: '1 / 1',
-	display: 'grid',
-	placeItems: 'center',
-	backgroundColor: color.mud,
-	borderRadius: '50%',
-});
-````
-
-## File: src/components/pages/my-profile/styles/reset-confirm.css.ts
-````typescript
-import { color } from '@/styles/color.css';
-import { style } from '@vanilla-extract/css';
-export const centered = style({
-	display: 'grid',
-	placeItems: 'center',
-});
-export const iconWrapper = style([
-	centered,
-	{
-		width: 56,
-		height: 56,
-		backgroundColor: color.cream,
-		borderRadius: '50%',
-	},
-]);
-````
-
 ## File: src/components/pages/my-profile/explorer-item.tsx
 ````typescript
 import { Container } from '@/components/layout/container';
@@ -4275,6 +4327,57 @@ export function MyProfileExplorerItem(props: ExplorerItemProps) {
 				<ChevronRight size={20} />
 			</Row>
 		</Container>
+	);
+}
+````
+
+## File: src/components/pages/my-profile/image.tsx
+````typescript
+import { Avatar } from '@/components/ui/avatar';
+// import { resizeImage } from '@/lib/common';
+import { log } from '@/lib/log';
+// import { apiClient } from '@/lib/managers/http';
+import { color } from '@/styles/color.css';
+import { message } from '@tauri-apps/plugin-dialog';
+import { Pencil } from 'lucide-react';
+import { type ChangeEvent, useState } from 'react';
+import { avatar, edit } from './styles/image.css';
+export function MyProfileImage() {
+	const [profileImage, setProfileImage] = useState<string | null>(
+		localStorage.getItem('profileImage'),
+	);
+	const onChange = async (e: ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0];
+		if (!file) {
+			return;
+		}
+		// const image = await resizeImage(file, 128);
+		const prevImage = localStorage.getItem('profileImage');
+		try {
+			await message('현재 빌드에선 프로필 이미지 변경을 할 수 없습니다.');
+			throw new Error('Profile image change is disabled in current build');
+			// await apiClient.patch('/users/me', {
+			// 	profileUrl: image,
+			// });
+			// localStorage.setItem('profileImage', image);
+			// setProfileImage(image);
+		} catch (error) {
+			await message('프로필 이미지 업데이트에 실패했어요.');
+			log('error', 'Failed to update profile image', error);
+			if (prevImage) {
+				localStorage.setItem('profileImage', prevImage);
+				setProfileImage(prevImage);
+			}
+		}
+	};
+	return (
+		<label className={avatar}>
+			<Avatar size={72} src={profileImage} />
+			<div className={edit}>
+				<Pencil size={12} color={color.milk} />
+			</div>
+			<input type='file' accept='image/*' hidden onChange={onChange} />
+		</label>
 	);
 }
 ````
@@ -4313,33 +4416,27 @@ export function SignUpInformationSection() {
 	);
 	const onClickSignUp = useCallback(async () => {
 		if (!name) {
-			await message('Please enter your name.', { kind: 'error' });
+			await message('이름을 입력해주세요.', { kind: 'error' });
 			return;
 		}
 		if (name.length < 1 || name.length > 50) {
-			await message('Name must be between 1 and 50 characters long.', {
-				kind: 'error',
-			});
-			return;
-		}
-		if (!/^[a-zA-Z\s]+$/.test(name)) {
-			await message('Name can only contain letters and spaces.', {
+			await message('이름은 1자 이상 50자 이하여야 합니다.', {
 				kind: 'error',
 			});
 			return;
 		}
 		if (!username) {
-			await message('Please enter your username.', { kind: 'error' });
+			await message('사용자 이름을 입력해주세요.', { kind: 'error' });
 			return;
 		}
 		if (username.length < 6 || username.length > 24) {
-			await message('Username must be between 6 and 24 characters long.', {
+			await message('사용자 이름은 6자 이상 24자 이하여야 합니다.', {
 				kind: 'error',
 			});
 			return;
 		}
 		if (!/^[a-zA-Z0-9.]+$/.test(username)) {
-			await message('Username must contain only letters, numbers, and dots.', {
+			await message('사용자 이름은 영문자, 숫자, 마침표만 사용할 수 있어요.', {
 				kind: 'error',
 			});
 			return;
@@ -4351,17 +4448,17 @@ export function SignUpInformationSection() {
 			<TopNavigator leadingArea={<GoBack />} />
 			<Column className={fillHeight}>
 				<Container className={title}>
-					<Typo.Title weight='strong'>Sign up</Typo.Title>
+					<Typo.Title weight='strong'>회원가입</Typo.Title>
 				</Container>
-				<InputField label='Profile Image'>
+				<InputField label='프로필 이미지'>
 					<ImageInput onImage={onChangeProfileImage} />
 				</InputField>
-				<InputField label='Name'>
-					<Input placeholder='Your full name' value={name} onValue={setName} />
+				<InputField label='이름'>
+					<Input placeholder='이름' value={name} onValue={setName} />
 				</InputField>
-				<InputField label='Username'>
+				<InputField label='사용자 이름'>
 					<Input
-						placeholder='Alphabet and number only'
+						placeholder='영문/숫자/점(.)만 사용 가능'
 						value={username}
 						onValue={setUsername}
 					/>
@@ -4369,7 +4466,7 @@ export function SignUpInformationSection() {
 			</Column>
 			<ButtonGroup bottomSafeAreaPadding>
 				<Button fill onClick={onClickSignUp}>
-					Sign up
+					회원가입
 				</Button>
 			</ButtonGroup>
 		</Column>
@@ -4412,6 +4509,33 @@ export const check = style({
 });
 ````
 
+## File: src/components/ui/avatar/index.tsx
+````typescript
+import { cn } from '@/lib/common';
+import type { BaseProps } from '@/types/props';
+import { avatar } from './styles/avatar.css';
+interface AvatarProps extends BaseProps {
+	size?: number;
+	src?: string | null;
+	onClick?: () => unknown;
+}
+export function Avatar(props: AvatarProps) {
+	const { size = 32, src, onClick, className } = props;
+	return (
+		<img
+			className={cn(avatar, className)}
+			src={src || '/profile.png'}
+			alt='Avatar'
+			style={{
+				width: size,
+				height: size,
+			}}
+			onClick={onClick}
+		/>
+	);
+}
+````
+
 ## File: src/components/ui/avatar/item.tsx
 ````typescript
 import { Column } from '@/components/layout/column';
@@ -4439,86 +4563,6 @@ export function AvatarItem(props: AvatarItemProps) {
 			</div>
 			<Typo.Caption>{user.name}</Typo.Caption>
 		</Column>
-	);
-}
-````
-
-## File: src/components/ui/button/styles/button.css.ts
-````typescript
-import { color } from '@/styles/color.css';
-import { uiStyle } from '@/styles/layer.css';
-export const button = uiStyle({
-	width: 'auto',
-	display: 'flex',
-	justifyContent: 'center',
-	padding: 16,
-	borderRadius: 16,
-	userSelect: 'none',
-	WebkitUserModify: 'read-only',
-	WebkitUserSelect: 'none',
-	transition: 'transform 0.2s ease, filter 0.2s ease',
-	':active': {
-		transform: 'scale(0.98)',
-		filter: 'brightness(0.9)',
-	},
-	':disabled': {
-		cursor: 'not-allowed',
-		filter: 'brightness(0.85)',
-		opacity: 0.6,
-	},
-});
-export const variantStyles = {
-	primary: uiStyle({
-		backgroundColor: color.mud,
-		color: color.milk,
-	}),
-	secondary: uiStyle({
-		backgroundColor: color.cream,
-	}),
-	text: uiStyle({
-		backgroundColor: 'transparent',
-	}),
-};
-export const fillStyle = uiStyle({
-	width: '100%',
-});
-````
-
-## File: src/components/ui/button/index.tsx
-````typescript
-import { cn } from '@/lib/common';
-import type { ButtonHTMLAttributes } from 'react';
-import { LoadingCircle } from '../loading-circle';
-import { Typo } from '../typography';
-import { button, fillStyle, variantStyles } from './styles/button.css';
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-	variant?: ButtonVariant;
-	fill?: boolean;
-	loading?: boolean;
-}
-type ButtonVariant = 'primary' | 'secondary' | 'text';
-export function Button(props: ButtonProps) {
-	const {
-		variant = 'primary',
-		fill = false,
-		loading = false,
-		disabled = loading,
-		className,
-		children,
-		...rest
-	} = props;
-	const classNames = [
-		button,
-		variantStyles[variant],
-		className,
-		{ [fillStyle]: fill },
-	];
-	return (
-		<button {...rest} className={cn(classNames)} disabled={disabled}>
-			<Typo.Body weight={variant === 'text' ? 'medium' : 'strong'}>
-				{loading ? <LoadingCircle size={20} /> : children}
-			</Typo.Body>
-		</button>
 	);
 }
 ````
@@ -4599,7 +4643,7 @@ export function MonthCalendar(props: MonthCalendarProps) {
 		<>
 			<Container vertical='small'>
 				<Row align='center' justify='space-between'>
-					<Typo.Lead weight='strong'>{date.format('MMMM')}</Typo.Lead>
+					<Typo.Lead weight='strong'>{date.month() + 1}월</Typo.Lead>
 					<Typo.Body color={color.sand}>{year}</Typo.Body>
 				</Row>
 			</Container>
@@ -4634,39 +4678,40 @@ export function CalendarProvider(props: CalendarProviderProps) {
 }
 ````
 
-## File: src/components/ui/content/index.tsx
+## File: src/components/ui/card/styles.css.ts
 ````typescript
-import { Column } from '@/components/layout/column';
-import { Container } from '@/components/layout/container';
-import { Typo } from '../typography';
-import { content, iconStyle } from './styles.css';
-interface ContentProps {
-	icon?: React.ReactNode;
-	title?: string;
-	description?: string;
-}
-export function Content(props: ContentProps) {
-	const { icon, title, description } = props;
-	return (
-		<Column className={content} align='center'>
-			{icon && (
-				<Container vertical='small' horizontal='none'>
-					<div className={iconStyle}>{icon}</div>
-				</Container>
-			)}
-			{title && (
-				<Container vertical='small' horizontal='none'>
-					<Typo.Title weight='strong'>{title}</Typo.Title>
-				</Container>
-			)}
-			{description && (
-				<Container vertical='small' horizontal='none'>
-					<Typo.Body>{description}</Typo.Body>
-				</Container>
-			)}
-		</Column>
-	);
-}
+import { color } from '@/styles/color.css';
+import { uiStyle } from '@/styles/layer.css';
+export const card = uiStyle({
+	width: '100%',
+	backgroundColor: color.cream,
+	borderRadius: 16,
+	overflow: 'hidden',
+	userSelect: 'none',
+	WebkitUserSelect: 'none',
+	transition: 'transform 0.2s ease-in-out, filter 0.2s ease-in-out',
+	':active': {
+		transform: 'scale(0.98)',
+		filter: 'brightness(0.9)',
+	},
+});
+export const content = uiStyle({
+	width: '100%',
+	height: 120,
+});
+export const preventOverflow = uiStyle({
+	width: '100%',
+	overflow: 'hidden',
+	textOverflow: 'ellipsis',
+	whiteSpace: 'nowrap',
+});
+export const title = uiStyle([preventOverflow]);
+export const preview = uiStyle([
+	preventOverflow,
+	{
+		opacity: 0.7,
+	},
+]);
 ````
 
 ## File: src/components/ui/divider/padding.tsx
@@ -4682,20 +4727,34 @@ export function PaddingDivider() {
 }
 ````
 
-## File: src/components/ui/drawer/animation.ts
+## File: src/components/ui/drawer/styles.css.ts
 ````typescript
-import { getTransition } from '@/lib/animation';
-import type { Variants } from 'motion/react';
-export const drawerVariants: Variants = {
-	hidden: {
-		y: '100%',
-		transition: getTransition(0.35),
+import { color } from '@/styles/color.css';
+import { uiStyle } from '@/styles/layer.css';
+export const drawer = uiStyle({
+	position: 'fixed',
+	bottom: 0,
+	left: 0,
+	width: '100%',
+	minHeight: 200,
+	backgroundColor: color.milk,
+	paddingBottom: 'env(safe-area-inset-bottom)',
+	borderRadius: '32px 32px 0px 0px',
+	boxShadow: '0px 0px 24px 8px rgba(0, 0, 0, 0.10)',
+	'::after': {
+		content: '""',
+		position: 'absolute',
+		width: '100%',
+		height: 1000,
+		backgroundColor: color.milk,
 	},
-	visible: {
-		y: 0,
-		transition: getTransition(0.35),
-	},
-};
+});
+export const handle = uiStyle({
+	width: 60,
+	height: 5,
+	backgroundColor: color.sand,
+	borderRadius: 1000,
+});
 ````
 
 ## File: src/components/ui/drawer/title.tsx
@@ -4824,45 +4883,53 @@ export function ListItem(props: ListItemProps) {
 }
 ````
 
-## File: src/components/ui/loading-circle/index.tsx
+## File: src/components/ui/overlay/provider.tsx
 ````typescript
-import { LoaderCircle } from 'lucide-react';
-import { loaderCircle, wrapper } from './styles.css';
-interface LoadingCircleProps {
-	size?: number;
-}
-export function LoadingCircle(props: LoadingCircleProps) {
-	const { size = 24 } = props;
+import './styles/root.css';
+import type { BaseProps, HAS_CHILDREN } from '@/types/props';
+import { AnimatePresence } from 'motion/react';
+import { useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { OverlayContext } from './context';
+import { OverlayRenderer } from './renderer';
+import type { OverlayContent } from './types';
+interface OverlayProviderProps extends BaseProps<HAS_CHILDREN> {}
+export function OverlayProvider(props: OverlayProviderProps) {
+	const { children: providerChildren } = props;
+	const [contents, setContents] = useState<Array<OverlayContent>>([]);
+	const hideContent = useCallback((id: string) => {
+		setContents((prev) => prev.filter((content) => content.id !== id));
+	}, []);
+	const overlayRoot = document.getElementById('overlay-root');
+	if (!overlayRoot) {
+		throw new Error('Overlay root element not found.');
+	}
 	return (
-		<div style={{ width: size, height: size }} className={wrapper}>
-			<LoaderCircle className={loaderCircle} size={size} />
-		</div>
+		<OverlayContext value={{ contents, setContents }}>
+			{providerChildren}
+			{createPortal(
+				<AnimatePresence>
+					{contents.map((c) => (
+						<OverlayRenderer
+							key={c.id}
+							content={c}
+							close={() => hideContent(c.id)}
+						/>
+					))}
+				</AnimatePresence>,
+				overlayRoot,
+			)}
+		</OverlayContext>
 	);
 }
 ````
 
-## File: src/components/ui/overlay/styles/backdrop.css.ts
+## File: src/components/ui/overlay/utils.ts
 ````typescript
-import { style } from '@vanilla-extract/css';
-export const backdrop = style({
-	position: 'fixed',
-	width: '100%',
-	height: '100vh',
-	top: 0,
-	left: 0,
-	backgroundColor: 'rgba(0, 0, 0, 0.25)',
-});
-````
-
-## File: src/components/ui/overlay/styles/root.css.ts
-````typescript
-import { resetGlobalStyle } from '@/styles/layer.css';
-resetGlobalStyle('#overlay-root', {
-	position: 'fixed',
-	top: 0,
-	left: 0,
-	zIndex: 1000,
-});
+import type { OverlayContent } from './types';
+export function isContentSaved(id: string, contents: Array<OverlayContent>) {
+	return contents.some((content) => content.id === id);
+}
 ````
 
 ## File: src/components/ui/popup/content.tsx
@@ -4897,30 +4964,6 @@ export function PopupContent(props: PopupContentProps) {
 }
 ````
 
-## File: src/components/ui/tabs/index.tsx
-````typescript
-import type { BaseProps, HAS_CHILDREN } from '@/types/props';
-import { useQueryState } from 'nuqs';
-import { TabsContext } from './context';
-interface TabsProps extends BaseProps<HAS_CHILDREN> {
-	defaultValue?: string;
-}
-export function Tabs(props: TabsProps) {
-	const { defaultValue, children } = props;
-	const [currentValue, setCurrentValue] = useQueryState('tab');
-	return (
-		<TabsContext
-			value={{
-				currentValue: currentValue || defaultValue || null,
-				setCurrentValue,
-			}}
-		>
-			{children}
-		</TabsContext>
-	);
-}
-````
-
 ## File: src/components/ui/top-navigator/go-back.tsx
 ````typescript
 import { Row } from '@/components/layout/row';
@@ -4930,14 +4973,15 @@ import { useNavigate } from 'react-router-dom';
 import { Typo } from '../typography';
 interface GoBackProps {
 	label?: string;
-	beforeBack?: () => unknown;
+	beforeBack?: (next: () => void) => unknown;
 }
 export function GoBack(props: GoBackProps) {
-	const { label = 'Back', beforeBack } = props;
+	const { label = '뒤로가기', beforeBack } = props;
 	const navigate = useNavigate();
 	const onClickBack = useCallback(async () => {
 		if (beforeBack) {
-			await beforeBack();
+			await beforeBack(() => navigate(-1));
+			return;
 		}
 		navigate(-1);
 	}, [beforeBack, navigate]);
@@ -5043,44 +5087,84 @@ export function useAuth() {
 }
 ````
 
-## File: src/lib/common.ts
+## File: src/hooks/use-drawer.ts
 ````typescript
-export { default as cn } from 'classnames';
-export async function resizeImage(image: File, size = 256) {
-	const reader = new FileReader();
-	const imageUrl = await new Promise<string>((resolve) => {
-		reader.onloadend = () => {
-			resolve(reader.result?.toString() ?? '');
-		};
-		reader.readAsDataURL(image);
-	});
-	const img = new Image();
-	const resizedImageUrl = await new Promise<string>((resolve) => {
-		img.onload = () => {
-			const canvas = document.createElement('canvas');
-			canvas.width = size;
-			canvas.height = size;
-			const ctx = canvas.getContext('2d');
-			if (ctx) {
-				ctx.drawImage(img, 0, 0, size, size);
-				resolve(canvas.toDataURL());
+import type { Renderer } from '@/components/ui/overlay/types';
+import { useOverlay } from './use-overlay';
+export function useDrawer<T extends object>(renderer: Renderer<T>) {
+	return useOverlay(renderer, {});
+}
+````
+
+## File: src/lib/managers/friend.ts
+````typescript
+export interface User {
+	uuid: string;
+	name: string;
+	username: string;
+	profileUrl: string;
+	publicKey: string;
+	createdAt: string;
+	updatedAt: string;
+}
+class FriendManager {
+	private friends: Map<string, User> = new Map();
+	constructor() {
+		if (typeof window !== 'undefined') {
+			const savedFriends = localStorage.getItem('saved-friends');
+			if (savedFriends) {
+				const parsedUsers = JSON.parse(savedFriends);
+				this.friends = new Map<string, User>(Object.entries(parsedUsers));
 			}
-		};
-		img.src = imageUrl;
-	});
-	return resizedImageUrl;
+		}
+	}
+	private save() {
+		if (typeof window !== 'undefined') {
+			localStorage.setItem(
+				'saved-friends',
+				JSON.stringify(Object.fromEntries(this.friends)),
+			);
+		}
+	}
+	isFriend(uuid: string) {
+		return this.friends.has(uuid);
+	}
+	cacheUser(user: User) {
+		this.friends.set(user.uuid, user);
+	}
+	getFriends() {
+		return Array.from(this.friends.values());
+	}
+	getFriend(uuid: string) {
+		return this.friends.get(uuid);
+	}
+	addFriend(user: User) {
+		if (this.friends.has(user.uuid)) {
+			return;
+		}
+		this.friends.set(user.uuid, user);
+		this.save();
+	}
+	updateFriend(uuid: string, user: User) {
+		if (!this.friends.has(uuid)) {
+			return;
+		}
+		this.friends.set(uuid, user);
+		this.save();
+	}
+	removeFriend(uuid: string) {
+		if (!this.friends.has(uuid)) {
+			return;
+		}
+		this.friends.delete(uuid);
+		this.save();
+	}
+	clear() {
+		this.friends.clear();
+		this.save();
+	}
 }
-export async function wait(ms: number) {
-	return new Promise((resolve) => {
-		setTimeout(resolve, ms);
-	});
-}
-export function calculateDiffDays(createdAt: Date) {
-	const now = new Date();
-	const diff = Math.abs(now.getTime() - createdAt.getTime());
-	const diffDays = Math.floor(diff / (1000 * 3600 * 24));
-	return diffDays;
-}
+export const friendManager = new FriendManager();
 ````
 
 ## File: src/lib/date.ts
@@ -5157,23 +5241,23 @@ export function getWeatherIcon(weather?: Weather) {
 export function getWeatherLabel(weather: Weather) {
 	switch (weather) {
 		case 'sunny':
-			return 'Sunny';
+			return '맑음';
 		case 'cloudy':
-			return 'Cloudy';
+			return '구름 많음';
 		case 'rainy':
-			return 'Rainy';
+			return '비';
 		case 'windy':
-			return 'Windy';
+			return '바람';
 		case 'snowy':
-			return 'Snowy';
+			return '눈';
 		case 'foggy':
-			return 'Foggy';
+			return '안개';
 		case 'stormy':
-			return 'Stormy';
+			return '폭풍';
 		case 'drizzle':
-			return 'Drizzle';
+			return '이슬비';
 		default:
-			return 'Sunny';
+			return '맑음';
 	}
 }
 ````
@@ -5196,7 +5280,7 @@ export default function SignInBiometricPage() {
 	const navigate = useNavigate();
 	const authenticateBiometric = useCallback(async () => {
 		try {
-			await authenticate('Authenticate to continue');
+			await authenticate('계속하려면 인증하세요');
 			const pin = await getItem('sotto-app');
 			if (!pin) {
 				throw new Error('PIN not found');
@@ -5221,7 +5305,7 @@ export default function SignInBiometricPage() {
 				<ButtonGroup bottomSafeAreaPadding>
 					<Link to='/sign-in/pin'>
 						<Button fill variant='secondary'>
-							Use PIN instead
+							PIN으로 로그인
 						</Button>
 					</Link>
 				</ButtonGroup>
@@ -5255,9 +5339,9 @@ export default function SignInForgotPinPage() {
 	const onClickDelete = useCallback(async () => {
 		if (
 			await confirm(
-				'This action cannot be undone. you must create a new account, and all your diaries will be deleted.',
+				'이 작업은 되돌릴 수 없습니다. 새 계정을 만들어야 하며 모든 일기가 삭제됩니다.',
 				{
-					title: 'Delete all diaries and log out?',
+					title: '모든 일기를 삭제하고 로그아웃할까요?',
 					kind: 'warning',
 				},
 			)
@@ -5270,15 +5354,15 @@ export default function SignInForgotPinPage() {
 		<Column className={page}>
 			<Content
 				icon={<ShieldQuestion size={48} />}
-				title='Forgot your PIN?'
-				description='You have to delete all your diaries and log out'
+				title='PIN을 잊으셨나요?'
+				description='모든 일기를 삭제하고 로그아웃해야 합니다'
 			/>
 			<ButtonGroup direction='vertical' bottomSafeAreaPadding>
 				<Button fill variant='text' onClick={onClickDelete}>
-					Delete all data and log out
+					모든 데이터를 삭제하고 로그아웃
 				</Button>
 				<Link to='/sign-in/pin'>
-					<Button fill>Cancel</Button>
+					<Button fill>취소</Button>
 				</Link>
 			</ButtonGroup>
 		</Column>
@@ -5317,21 +5401,21 @@ export default function SignInPinPage() {
 				throw new Error('PIN not found');
 			}
 			if (pin !== savedPin) {
-				await message('Invalid PIN', { kind: 'error' });
+				await message('잘못된 PIN입니다', { kind: 'error' });
 				return;
 			}
 			await processSignIn(pin);
 			navigate('/home');
 		} catch (error) {
 			log('error', 'PIN authentication failed', error);
-			await message('PIN authentication failed', { kind: 'error' });
+			await message('PIN 인증에 실패했습니다', { kind: 'error' });
 		}
 	};
 	return (
 		<Column className={page}>
 			<Column className={page}>
 				<Container className={title}>
-					<Typo.Lead weight='strong'>Enter your PIN</Typo.Lead>
+					<Typo.Lead weight='strong'>PIN을 입력하세요</Typo.Lead>
 				</Container>
 				<Container vertical='small'>
 					<PINInput onPin={onPin} />
@@ -5340,13 +5424,13 @@ export default function SignInPinPage() {
 			<ButtonGroup direction='vertical' bottomSafeAreaPadding>
 				<Link to='/sign-in/forgot-pin'>
 					<Button fill variant='text'>
-						Forgot your PIN?
+						PIN을 잊으셨나요?
 					</Button>
 				</Link>
 				{localStorage.getItem('useBiometricLogin') === 'true' && (
 					<Link to='/sign-in/biometric'>
 						<Button fill variant='secondary'>
-							Use Biometric instead
+							생체 인증으로 로그인
 						</Button>
 					</Link>
 				)}
@@ -5367,193 +5451,62 @@ export const title = style({
 });
 ````
 
-## File: src/routes/auth/sign-up/index.tsx
+## File: src/routes/home/index.tsx
 ````typescript
-import { generateKeyPair } from '@/binding/function/generate-key-pair';
-import { SignUpBiometricSection } from '@/components/pages/sign-up/biometric';
-import { SignUpConfirmPinSection } from '@/components/pages/sign-up/confirm-pin';
-import { SignUpFlowContext } from '@/components/pages/sign-up/context';
-import { SignUpInformationSection } from '@/components/pages/sign-up/information';
-import { SignUpSetPinSection } from '@/components/pages/sign-up/set-pin';
-import { Flow } from '@/components/ui/flow';
-import { processSignIn } from '@/lib/app';
-import { log } from '@/lib/log';
-import { apiClient } from '@/lib/managers/http';
-import { storageClient } from '@/lib/managers/storage';
-import { message } from '@tauri-apps/plugin-dialog';
-import { useCallback, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { saveItem } from 'tauri-plugin-keychain';
-export default function SignUpPage() {
-	const [profileImage, setProfileImage] = useState<string | null>(null);
-	const [name, setName] = useState<string>('');
-	const [username, setUsername] = useState<string>('');
-	const [pin, setPin] = useState<string>('');
-	const [confirmPin, setConfirmPin] = useState<string>('');
-	const [useBiometricLogin, setUseBiometricLogin] = useState<boolean>(false);
-	const navigate = useNavigate();
-	const onClickSignUp = useCallback(
-		async (biometricLogin: boolean) => {
-			setUseBiometricLogin(biometricLogin);
-			const { publicKeyPem, privateKeyPem } = await generateKeyPair();
-			try {
-				await storageClient.init(pin);
-				await saveItem('sotto-app', pin);
-				const { accessToken, user } = await apiClient.post<SignUpResponse>(
-					'/users',
-					{
-						name,
-						username,
-						profileUrl: profileImage,
-						publicKey: publicKeyPem,
-					},
-				);
-				storageClient.set('publicKey', publicKeyPem);
-				storageClient.set('privateKey', privateKeyPem);
-				if (profileImage) {
-					localStorage.setItem('profileImage', profileImage);
-				}
-				localStorage.setItem('app-initialized', 'true');
-				localStorage.setItem('accessToken', accessToken);
-				localStorage.setItem('username', username);
-				localStorage.setItem('name', name);
-				localStorage.setItem('useBiometricLogin', biometricLogin.toString());
-				await message(`Sign up successful! Welcome ${user.name}`);
-				await processSignIn(pin);
-				navigate('/home');
-			} catch (error) {
-				await message('Sign up failed. Please try again.', { kind: 'error' });
-				log('error', 'Sign up failed', error);
-			}
-		},
-		[name, username, profileImage, pin, navigate],
-	);
-	return (
-		<SignUpFlowContext
-			value={{
-				profileImage,
-				name,
-				username,
-				pin,
-				confirmPin,
-				useBiometricLogin,
-				setProfileImage,
-				setName,
-				setUsername,
-				setPin,
-				setConfirmPin,
-				setUseBiometricLogin,
-			}}
-		>
-			<Flow
-				pages={[
-					<SignUpInformationSection key='information' />,
-					<SignUpSetPinSection key='set-pin' />,
-					<SignUpConfirmPinSection key='confirm-pin' />,
-					<SignUpBiometricSection key='biometric' signUp={onClickSignUp} />,
-				]}
-			/>
-		</SignUpFlowContext>
-	);
-}
-````
-
-## File: src/routes/diary/page.css.ts
-````typescript
-import {
-	body,
-	title,
-	typography,
-} from '@/components/ui/typography/styles/typography.css';
-import { weightStyles } from '@/components/ui/typography/styles/weight.css';
-import { style } from '@vanilla-extract/css';
-export const page = style({
-	height: '100%',
-});
-export const titleInput = style([
-	typography,
-	title,
-	weightStyles.strong,
-	{
-		':disabled': {
-			opacity: 1,
-		},
-	},
-]);
-export const textAreaContainer = style({
-	height: '100%',
-});
-export const textArea = style([
-	typography,
-	body,
-	weightStyles.medium,
-	{
-		height: '100%',
-		':disabled': {
-			opacity: 1,
-		},
-	},
-]);
-````
-
-## File: src/routes/index/index.tsx
-````typescript
-import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button/group';
-import { LoadingCircle } from '@/components/ui/loading-circle';
+import { Column } from '@/components/layout/column';
+import { Row } from '@/components/layout/row';
+import { HomeBottomNavigator } from '@/components/pages/home/bottom-navigator';
+import { HomeFriendsDiariesSection } from '@/components/pages/home/friends-diaries';
+import { HomeMyDiariesSection } from '@/components/pages/home/my-diaries';
+import { Avatar } from '@/components/ui/avatar';
 import { SottoSymbol } from '@/components/ui/sotto-symbol';
+import { Tabs } from '@/components/ui/tabs';
+import { TabsContent } from '@/components/ui/tabs/content';
+import { TabsGroup, TabsItem } from '@/components/ui/tabs/item';
+import { TopNavigator } from '@/components/ui/top-navigator';
 import { Typo } from '@/components/ui/typography';
-import { wait } from '@/lib/common';
-import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { centerSymbol } from './page.css';
-export default function IndexPage() {
-	const [showSignUp, setShowSignUp] = useState(false);
-	const navigate = useNavigate();
-	const startApp = useCallback(async () => {
-		await wait(500);
-		if (localStorage.getItem('app-initialized') === 'true') {
-			setShowSignUp(false);
-		} else {
-			setShowSignUp(true);
-			return;
-		}
-		if (localStorage.getItem('useBiometricLogin') === 'true') {
-			navigate('/sign-in/biometric');
-		} else {
-			navigate('/sign-in/pin');
-		}
-	}, [navigate]);
-	useEffect(() => {
-		startApp();
-	}, [startApp]);
+import { fullHeight } from '@/styles/utils.css';
+import { useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { left, right } from './page.css';
+export default function HomePage() {
+	const navigator = useNavigate();
+	const onClickAvatar = useCallback(() => {
+		navigator('/my-profile');
+	}, [navigator]);
 	return (
-		<>
-			<SottoSymbol className={centerSymbol} size={84} />
-			<ButtonGroup direction='vertical' float>
-				{import.meta.env.DEV && <Typo.Body>{import.meta.env.MODE}</Typo.Body>}
-				{showSignUp ? (
-					<Link to='/sign-up'>
-						<Button fill>Sign up</Button>
-					</Link>
-				) : (
-					<LoadingCircle size={32} />
-				)}
-			</ButtonGroup>
-		</>
+		<Column className={fullHeight} justify='start'>
+			<TopNavigator
+				leadingArea={
+					<Row className={left} align='center' gap={6}>
+						<SottoSymbol />
+						<Typo.Lead weight='strong'>Sotto</Typo.Lead>
+					</Row>
+				}
+				trailingArea={
+					<Avatar
+						className={right}
+						src={localStorage.getItem('profileImage')}
+						onClick={onClickAvatar}
+					/>
+				}
+			/>
+			<Tabs defaultValue='my'>
+				<TabsGroup>
+					<TabsItem value='my'>내 일기</TabsItem>
+					<TabsItem value='friends'>친구</TabsItem>
+				</TabsGroup>
+				<TabsContent value='my'>
+					<HomeMyDiariesSection />
+				</TabsContent>
+				<TabsContent value='friends'>
+					<HomeFriendsDiariesSection />
+				</TabsContent>
+			</Tabs>
+			<HomeBottomNavigator />
+		</Column>
 	);
 }
-````
-
-## File: src/routes/index/page.css.ts
-````typescript
-import { style } from '@vanilla-extract/css';
-export const centerSymbol = style({
-	position: 'fixed',
-	top: '50%',
-	left: '50%',
-	transform: 'translate(-50%, -50%)',
-});
 ````
 
 ## File: src/routes/index.ts
@@ -5597,58 +5550,23 @@ export const FIRA_CODE = fontFace({
 });
 ````
 
-## File: src/styles/utils.css.ts
+## File: src/main.tsx
 ````typescript
-import { style } from '@vanilla-extract/css';
-export const fullHeight = style({
-	height: '100%',
-});
-````
-
-## File: src-tauri/gen/android/app/src/main/java/com/tyeongkim/sotto_app/MainActivity.kt
-````kotlin
-package com.tyeongkim.sotto_app
-class MainActivity : TauriActivity()
-````
-
-## File: src-tauri/gen/android/app/src/main/AndroidManifest.xml
-````xml
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
-    <uses-permission android:name="android.permission.INTERNET" />
-    <!-- AndroidTV support -->
-    <uses-feature android:name="android.software.leanback" android:required="false" />
-    <application
-        android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
-        android:theme="@style/Theme.sotto_app"
-        android:usesCleartextTraffic="${usesCleartextTraffic}"
-        tools:replace="android:theme">
-        <activity
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
-            android:launchMode="singleTask"
-            android:label="@string/main_activity_title"
-            android:name=".MainActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-                <!-- AndroidTV support -->
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-            </intent-filter>
-        </activity>
-        <provider
-          android:name="androidx.core.content.FileProvider"
-          android:authorities="${applicationId}.fileprovider"
-          android:exported="false"
-          android:grantUriPermissions="true">
-          <meta-data
-            android:name="android.support.FILE_PROVIDER_PATHS"
-            android:resource="@xml/file_paths" />
-        </provider>
-    </application>
-</manifest>
+import { NuqsAdapter } from 'nuqs/adapters/react';
+import { Suspense } from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+const root = document.getElementById('root');
+if (!root) {
+	throw new Error('Root element not found');
+}
+ReactDOM.createRoot(root).render(
+	<Suspense>
+		<NuqsAdapter>
+			<App />
+		</NuqsAdapter>
+	</Suspense>,
+);
 ````
 
 ## File: src-tauri/Cargo.toml
@@ -5736,45 +5654,21 @@ tauri-plugin-biometric = "2"
 }
 ````
 
-## File: biome.json
-````json
-{
-	"$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-	"vcs": {
-		"enabled": true,
-		"clientKind": "git",
-		"useIgnoreFile": true
-	},
-	"files": {
-		"ignoreUnknown": true,
-		"ignore": ["src-tauri/"]
-	},
-	"formatter": {
-		"enabled": true,
-		"indentStyle": "tab"
-	},
-	"organizeImports": {
-		"enabled": true
-	},
-	"linter": {
-		"enabled": true,
-		"rules": {
-			"recommended": true,
-			"a11y": {
-				"useKeyWithClickEvents": "off"
-			},
-			"correctness": {
-				"noUnusedImports": "error"
-			}
-		}
-	},
-	"javascript": {
-		"formatter": {
-			"quoteStyle": "single",
-			"jsxQuoteStyle": "single"
-		}
-	}
-}
+## File: index.html
+````html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Sotto</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="overlay-root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
 ````
 
 ## File: LICENSE.md
@@ -5802,51 +5696,127 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-## File: README.md
-````markdown
-<div align="center">
-  <img src="./assets/icon.png" alt="Sotto Symbol">
-
-  # Sotto
-  Write your diary, share with friends safely
-  ---
-
-  <img src="./assets/mockups.png" alt="Mockups">
-</div>
-
-# Features
-### 🔒 Highly Secured
-All data will be stored in your local device using [IOTA Stronghold](https://github.com/iotaledger/stronghold.rs).
-
-When sharing data, Asymmetric encryption will be applied (RSA for data, AES for key sharing).
-
-You can also lock the app using biometric or PIN login.
-
-### 👥 Sharing
-You can share your diaries to your friends easily only with a few touch.
-
-# Download
-This app cannot run on real iPhone because I don't have Apple Developer Program ($99 per year).
-
-- [Android (10+)](https://github.com/cottons-kr/sotto-app/releases/download/1.0/Sotto-Android.zip)
-- [iOS **(Simulator only)**](https://github.com/cottons-kr/sotto-app/releases/download/1.0/Sotto-iOS-Simulator.zip)
-
-# Others
-- [`sotto-api`](https://github.com/cottons-kr/sotto-api)
-
-# License
-[MIT](https://github.com/cottons-kr/sotto-app/blob/main/LICENSE.md)
+## File: src/binding/function/encrypt-data.ts
+````typescript
+import { invoke } from '@tauri-apps/api/core';
+/**
+ * ```rust
+ * BASE64_STANDARD.encode(&encrypted_data)
+ * BASE64_STANDARD.encode(&aes_key)
+ * BASE64_STANDARD.encode(&nonce_bytes)
+ * ```
+ */
+type EncryptResult = [string, string, string];
+export async function encryptData(data: string | object, prevAesKey?: string) {
+	const parsedData = typeof data === 'string' ? data : JSON.stringify(data);
+	const result = await invoke<EncryptResult>('encrypt_data', {
+		data: parsedData,
+		prevAesKey,
+	});
+	return result;
+}
 ````
 
-## File: src/binding/types/diary-data.d.ts
+## File: src/components/features/attachment/styles/focus.css.ts
 ````typescript
-interface DiaryData {
-	emoji: string;
-	title: string;
-	content: string;
-	location?: string;
-	weather?: string;
-	attachments: Array<string>;
+import { color } from '@/styles/color.css';
+import { uiStyle } from '@/styles/layer.css';
+export const image = uiStyle({
+	position: 'fixed',
+	maxWidth: 'calc(100% - 32px)',
+	maxHeight: '50vh',
+	borderRadius: 16,
+	userSelect: 'none',
+	WebkitUserModify: 'read-only',
+	WebkitTouchCallout: 'none',
+	top: '50%',
+	left: '50%',
+});
+export const deleteButton = uiStyle({
+	position: 'fixed',
+	width: 48,
+	height: 48,
+	backgroundColor: color.cream,
+	borderRadius: '50%',
+	right: '50%',
+	bottom: 64,
+});
+````
+
+## File: src/components/features/attachment/focus.tsx
+````typescript
+import type { OverlayProps } from '@/components/ui/overlay/types';
+import { useOverlay } from '@/hooks/use-overlay';
+import { getTransition } from '@/lib/animation';
+import { Trash } from 'lucide-react';
+import { type Variants, motion } from 'motion/react';
+import { useCallback } from 'react';
+import { AttachmentDeletePopup } from './delete-popup';
+import { deleteButton, image } from './styles/focus.css';
+const imageVariants: Variants = {
+	hidden: {
+		x: '-50%',
+		y: '-50%',
+		opacity: 0,
+		scale: 0.95,
+	},
+	visible: {
+		x: '-50%',
+		y: '-50%',
+		opacity: 1,
+		scale: 1,
+		transition: getTransition(0.35),
+	},
+};
+const buttonVariants: Variants = {
+	hidden: {
+		x: '50%',
+		opacity: 0,
+		scale: 0.95,
+	},
+	visible: {
+		x: '50%',
+		opacity: 1,
+		scale: 1,
+		transition: getTransition(0.35),
+	},
+};
+interface AttachmentFocusProps {
+	previewUrl: string;
+	handleDelete: () => unknown;
+}
+export function AttachmentFocus(props: AttachmentFocusProps & OverlayProps) {
+	const { previewUrl, handleDelete, close } = props;
+	const { show: openDelete } = useOverlay(AttachmentDeletePopup);
+	const onClickDelete = useCallback(() => {
+		openDelete({ handleDelete });
+	}, [openDelete, handleDelete]);
+	return (
+		<>
+			<motion.img
+				className={image}
+				src={previewUrl}
+				alt='Preview'
+				draggable={false}
+				variants={imageVariants}
+				initial='hidden'
+				animate='visible'
+				exit='hidden'
+				onClick={close}
+			/>
+			<motion.button
+				type='button'
+				className={deleteButton}
+				variants={buttonVariants}
+				initial='hidden'
+				animate='visible'
+				exit='hidden'
+				onClick={onClickDelete}
+			>
+				<Trash />
+			</motion.button>
+		</>
+	);
 }
 ````
 
@@ -5896,54 +5866,132 @@ export const emptyIcon = style({
 });
 ````
 
-## File: src/components/features/diary/delete-popup.tsx
+## File: src/components/features/diary/detail-drawer.tsx
 ````typescript
+import { Column } from '@/components/layout/column';
+import { Container } from '@/components/layout/container';
+import { Row } from '@/components/layout/row';
+import { Drawer } from '@/components/ui/drawer';
+import type { OverlayProps } from '@/components/ui/overlay/types';
+import { Typo } from '@/components/ui/typography';
+import { calculateDiffDays } from '@/lib/common';
+import type { BaseProps, HAS_CHILDREN } from '@/types/props';
+import {
+	card,
+	preventOverflow,
+	preview,
+	title,
+} from './styles/detail-drawer.css';
+interface DiaryDetailDrawerProps extends BaseProps<HAS_CHILDREN> {
+	diary: Diary;
+}
+export function DiaryDetailDrawer(
+	props: DiaryDetailDrawerProps & OverlayProps,
+) {
+	const { diary, children, close } = props;
+	const diffDays = calculateDiffDays(new Date(diary.createdAt));
+	return (
+		<Drawer close={close}>
+			<Container vertical='small'>
+				<Container className={card}>
+					<Row>
+						<Column
+							className={preventOverflow}
+							gap={6}
+							justify='end'
+							align='start'
+						>
+							<Typo.Lead>{diary.emoji}</Typo.Lead>
+							<Column className={preventOverflow} gap={2} align='start'>
+								<Typo.Body className={title} weight='strong'>
+									{diary.title || '제목없음'}
+								</Typo.Body>
+								<Typo.Caption className={preview}>
+									{diary.content.split('\n')[0].trim() ||
+										'아직 내용이 없어요 :('}
+								</Typo.Caption>
+							</Column>
+						</Column>
+						<Typo.Caption>
+							{diffDays === 0
+								? '오늘'
+								: diffDays === 1
+									? '어제'
+									: `${diffDays}일 전`}
+						</Typo.Caption>
+					</Row>
+				</Container>
+			</Container>
+			{children}
+		</Drawer>
+	);
+}
+````
+
+## File: src/components/features/diary/url-copied-popup.tsx
+````typescript
+import { Column } from '@/components/layout/column';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button/group';
 import type { OverlayProps } from '@/components/ui/overlay/types';
 import { Popup } from '@/components/ui/popup';
 import { PopupContent } from '@/components/ui/popup/content';
-import { useAuth } from '@/hooks/use-auth';
-import { log } from '@/lib/log';
-import { type Diary, diaryManager } from '@/lib/managers/diary';
-import { message } from '@tauri-apps/plugin-dialog';
-import { TriangleAlert } from 'lucide-react';
+import { useOverlay } from '@/hooks/use-overlay';
+import { color } from '@/styles/color.css';
+import { ClipboardCheck } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { useCallback } from 'react';
-interface DeleteDiaryPopupProps {
-	diary: Diary;
-	callback: () => unknown;
+interface DiaryURLCopiedPopupProps {
+	url: string;
 }
-export function DeleteDiaryPopup(props: DeleteDiaryPopupProps & OverlayProps) {
-	const { diary, callback, close } = props;
-	const authenticate = useAuth();
-	const onClickDelete = useCallback(() => {
-		authenticate(async () => {
-			try {
-				await diaryManager.removeDiary(diary.uuid);
-				await callback();
-			} catch (error) {
-				log('error', 'Failed to delete diary:', error);
-				await message('Failed to delete diary.');
-			} finally {
-				close();
-			}
-		});
-	}, [authenticate, diary, close, callback]);
+export function DiaryURLCopiedPopup(
+	props: DiaryURLCopiedPopupProps & OverlayProps,
+) {
+	const { url, close } = props;
+	const { show: showQR } = useOverlay(QRPopup);
+	const onClickQR = useCallback(() => {
+		showQR({ url });
+	}, [url, showQR]);
 	return (
 		<Popup>
 			<PopupContent
-				icon={<TriangleAlert />}
-				title='Delete diary?'
-				description='Deleted diaries cannot be recovered'
+				icon={<ClipboardCheck />}
+				title='URL이 클립보드에 복사되었어요'
+				description='URL을 가진 사람은 이 일기를 볼 수 있어요'
 			/>
-			<ButtonGroup direction='horizontal' smallPadding>
-				<Button fill onClick={onClickDelete}>
-					Delete
+			<ButtonGroup smallPadding>
+				<Button fill variant='secondary' onClick={onClickQR}>
+					QR 코드 보기
 				</Button>
-				<Button fill variant='secondary' onClick={close}>
-					Cancel
+				<Button fill onClick={close}>
+					확인
 				</Button>
 			</ButtonGroup>
+		</Popup>
+	);
+}
+interface QRPopupProps {
+	url: string;
+}
+function QRPopup(props: QRPopupProps & OverlayProps) {
+	const { url, close } = props;
+	return (
+		<Popup>
+			<Column align='center' gap={8}>
+				<QRCodeSVG
+					value={url}
+					size={196}
+					level='L'
+					marginSize={4}
+					bgColor={color.milk}
+					fgColor={color.mud}
+				/>
+				<ButtonGroup smallPadding>
+					<Button fill onClick={close}>
+						닫기
+					</Button>
+				</ButtonGroup>
+			</Column>
 		</Popup>
 	);
 }
@@ -5976,9 +6024,9 @@ export function AddFriendDrawer(props: OverlayProps) {
 	);
 	return (
 		<UserPickerDrawer
-			title='Add friends'
+			title='친구 추가'
 			defaultSelected={friends.map((f) => f.uuid)}
-			buttons={[{ label: 'Add', loading: isAdding, onClick: onClickAdd }]}
+			buttons={[{ label: '추가', loading: isAdding, onClick: onClickAdd }]}
 			close={close}
 		/>
 	);
@@ -6017,13 +6065,13 @@ export function LocationPresetsEditDrawer(
 	);
 	const onClickApply = useCallback(async () => {
 		if (!address.trim()) {
-			await message('Please enter a valid address.');
+			await message('유효한 주소를 입력해 주세요.');
 			return;
 		}
 		try {
 			await locationManager.setPreset(name, address);
 		} catch (error) {
-			await message('Failed to add preset');
+			await message('프리셋 추가에 실패했어요');
 			return;
 		} finally {
 			close();
@@ -6035,20 +6083,16 @@ export function LocationPresetsEditDrawer(
 	}, [name, close, openResetConfirm]);
 	return (
 		<Drawer close={close}>
-			<DrawerTitle>Edit "{locationManager.getPresetName(name)}"</DrawerTitle>
+			<DrawerTitle>"{locationManager.getPresetName(name)}" 수정</DrawerTitle>
 			<InputField>
-				<Input
-					placeholder='Enter address'
-					value={address}
-					onValue={setAddress}
-				/>
+				<Input placeholder='주소 입력' value={address} onValue={setAddress} />
 			</InputField>
 			<ButtonGroup>
 				<Button fill variant='secondary' onClick={onClickReset}>
-					Reset
+					초기화
 				</Button>
 				<Button fill onClick={onClickApply}>
-					Apply
+					적용
 				</Button>
 			</ButtonGroup>
 		</Drawer>
@@ -6118,7 +6162,7 @@ export function BanFriendDrawer(props: BanUserDrawerProps & OverlayProps) {
 			await callback?.(friend);
 		} catch (error) {
 			log('error', 'Failed to block friend', error);
-			await message('Failed to block friend');
+			await message('친구 차단에 실패했습니다');
 		}
 		close();
 	}, [friend, callback, close]);
@@ -6129,20 +6173,20 @@ export function BanFriendDrawer(props: BanUserDrawerProps & OverlayProps) {
 					<Avatar size={56} src={friend.profileUrl} />
 				</Container>
 				<Container className={center} vertical='small'>
-					<Typo.Lead weight='strong'>Block “{friend.name}”?</Typo.Lead>
+					<Typo.Lead weight='strong'>“{friend.name}”님을 차단할까요?</Typo.Lead>
 				</Container>
 				<Container className={center} vertical='none'>
 					<Typo.Body className={banWarning}>
-						You will never receive friends diary from “{friend.name}”
+						앞으로 “{friend.name}”님의 일기를 받을 수 없어요
 					</Typo.Body>
 				</Container>
 			</Container>
 			<ButtonGroup direction='horizontal'>
 				<Button fill onClick={onClickBlock}>
-					Block
+					차단
 				</Button>
 				<Button variant='secondary' fill onClick={close}>
-					Cancel
+					취소
 				</Button>
 			</ButtonGroup>
 		</Drawer>
@@ -6150,20 +6194,71 @@ export function BanFriendDrawer(props: BanUserDrawerProps & OverlayProps) {
 }
 ````
 
-## File: src/components/pages/diary/styles/additional-info.css.ts
+## File: src/components/layout/container/index.tsx
 ````typescript
-import { color } from '@/styles/color.css';
-import { uiStyle } from '@/styles/layer.css';
-export const item = uiStyle({
-	width: '100%',
-	padding: '12px 0',
-	backgroundColor: color.cream,
-	borderRadius: 16,
-	color: color.sand,
-});
-export const itemActive = uiStyle({
-	color: color.mud,
-});
+import type { BaseProps, HAS_CHILDREN } from '@/types/props';
+import { type JSX, useRef } from 'react';
+interface ContainerProps extends BaseProps<HAS_CHILDREN> {
+	as?: keyof JSX.IntrinsicElements;
+	vertical?: Padding;
+	horizontal?: Padding;
+	onClick?: () => unknown;
+	onLongPress?: () => unknown;
+}
+type Padding = 'none' | 'small' | 'regular' | 'medium' | 'large';
+const paddingMap: Record<Padding, string> = {
+	none: '0',
+	small: '8px',
+	regular: '12px',
+	medium: '16px',
+	large: '24px',
+};
+export function Container(props: ContainerProps) {
+	const {
+		as: Component = 'div',
+		vertical = 'medium',
+		horizontal = 'medium',
+		onClick,
+		onLongPress,
+		...rest
+	} = props;
+	const timeoutRef = useRef<number | null>(null);
+	const longPressedRef = useRef(false);
+	const handlePressStart = () => {
+		longPressedRef.current = false;
+		timeoutRef.current = window.setTimeout(() => {
+			longPressedRef.current = true;
+			onLongPress?.();
+		}, 350);
+	};
+	const handlePressEnd = () => {
+		if (timeoutRef.current !== null) {
+			clearTimeout(timeoutRef.current);
+		}
+		if (!longPressedRef.current) {
+			onClick?.();
+		}
+		longPressedRef.current = false;
+	};
+	return (
+		<Component
+			{...rest}
+			{...(onLongPress
+				? {
+						onMouseDown: handlePressStart,
+						onTouchStart: handlePressStart,
+						onMouseUp: handlePressEnd,
+						onMouseLeave: handlePressEnd,
+						onTouchEnd: handlePressEnd,
+						onTouchCancel: handlePressEnd,
+					}
+				: { onClick })}
+			style={{
+				padding: `${paddingMap[vertical]} ${paddingMap[horizontal]}`,
+			}}
+		/>
+	);
+}
 ````
 
 ## File: src/components/pages/explorer/shared/styles/content.css.ts
@@ -6275,6 +6370,36 @@ export function HomeMyDiariesCalendar() {
 }
 ````
 
+## File: src/components/pages/home/my-diaries/views/list.tsx
+````typescript
+import { Container } from '@/components/layout/container';
+import { Grid } from '@/components/layout/grid';
+import { DiaryCard } from '@/components/ui/card/diary';
+import { Content } from '@/components/ui/content';
+import { diaryManager } from '@/lib/managers/diary';
+import { fullHeight } from '@/styles/utils.css';
+import { BookDashed } from 'lucide-react';
+export function HomeMyDiariesList() {
+	const diaries = diaryManager.getDiaries();
+	return (
+		<Container className={fullHeight}>
+			{diaries.length > 0 ? (
+				<Grid>
+					{diaries.map((diary) => (
+						<DiaryCard key={diary.uuid} diary={diary} />
+					))}
+				</Grid>
+			) : (
+				<Content
+					icon={<BookDashed size={48} />}
+					description='“+”를 눌러 이야기를 시작하세요'
+				/>
+			)}
+		</Container>
+	);
+}
+````
+
 ## File: src/components/pages/home/my-diaries/index.tsx
 ````typescript
 import { useQueryState } from 'nuqs';
@@ -6290,78 +6415,115 @@ export function HomeMyDiariesSection() {
 }
 ````
 
-## File: src/components/pages/my-profile/image.tsx
+## File: src/components/pages/home/friend-diary-drawer.tsx
 ````typescript
+import { DiaryDetailDrawer } from '@/components/features/diary/detail-drawer';
+import { BanFriendDrawer } from '@/components/features/user/ban-drawer';
+import { Container } from '@/components/layout/container';
+import { Row } from '@/components/layout/row';
 import { Avatar } from '@/components/ui/avatar';
-import { resizeImage } from '@/lib/common';
-import { log } from '@/lib/log';
-import { apiClient } from '@/lib/managers/http';
-import { color } from '@/styles/color.css';
-import { message } from '@tauri-apps/plugin-dialog';
-import { Pencil } from 'lucide-react';
-import { type ChangeEvent, useState } from 'react';
-import { avatar, edit } from './styles/image.css';
-export function MyProfileImage() {
-	const [profileImage, setProfileImage] = useState<string | null>(
-		localStorage.getItem('profileImage'),
-	);
-	const onChange = async (e: ChangeEvent<HTMLInputElement>) => {
-		const file = e.target.files?.[0];
-		if (!file) {
-			return;
-		}
-		const image = await resizeImage(file, 128);
-		const prevImage = localStorage.getItem('profileImage');
-		try {
-			await apiClient.patch('/users/me', {
-				profileUrl: image,
+import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button/group';
+import type { OverlayProps } from '@/components/ui/overlay/types';
+import { Typo } from '@/components/ui/typography';
+import { useOverlay } from '@/hooks/use-overlay';
+import { friendManager } from '@/lib/managers/friend';
+import { useCallback } from 'react';
+interface HomeFriendDiaryDrawerProps {
+	diary: Diary;
+	onDelete?: () => void;
+}
+export function HomeFriendDiaryDrawer(
+	props: HomeFriendDiaryDrawerProps & OverlayProps,
+) {
+	const { diary, onDelete, close } = props;
+	const friend = friendManager.getFriend(diary?.sharedBy || '');
+	const { show: openBanFriend } = useOverlay(BanFriendDrawer);
+	const onClickDelete = useCallback(() => {
+		if (friend) {
+			openBanFriend({
+				friend,
+				callback: () => {
+					onDelete?.();
+					close();
+				},
 			});
-			localStorage.setItem('profileImage', image);
-			setProfileImage(image);
-		} catch (error) {
-			await message('Failed to update profile image.');
-			log('error', 'Failed to update profile image', error);
-			if (prevImage) {
-				localStorage.setItem('profileImage', prevImage);
-				setProfileImage(prevImage);
-			}
 		}
-	};
+	}, [friend, openBanFriend, onDelete, close]);
+	if (!friend) {
+		return null;
+	}
 	return (
-		<label className={avatar}>
-			<Avatar size={72} src={profileImage} />
-			<div className={edit}>
-				<Pencil size={12} color={color.milk} />
-			</div>
-			<input type='file' accept='image/*' hidden onChange={onChange} />
-		</label>
+		<DiaryDetailDrawer diary={diary} close={close}>
+			<Container horizontal='large'>
+				<Row gap={8} align='center' justify='start'>
+					<Avatar size={32} />
+					<Typo.Body weight='medium'>{friend.name}가 공유함</Typo.Body>
+				</Row>
+			</Container>
+			<ButtonGroup>
+				<Button fill onClick={onClickDelete}>
+					{friend.name} 차단
+				</Button>
+			</ButtonGroup>
+		</DiaryDetailDrawer>
 	);
 }
 ````
 
-## File: src/components/ui/avatar/index.tsx
+## File: src/components/pages/my-profile/reset-confirm.tsx
 ````typescript
-import { cn } from '@/lib/common';
-import type { BaseProps } from '@/types/props';
-import { avatar } from './styles/avatar.css';
-interface AvatarProps extends BaseProps {
-	size?: number;
-	src?: string | null;
-	onClick?: () => unknown;
-}
-export function Avatar(props: AvatarProps) {
-	const { size = 32, src, onClick, className } = props;
+import { Container } from '@/components/layout/container';
+import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button/group';
+import { Drawer } from '@/components/ui/drawer';
+import type { OverlayProps } from '@/components/ui/overlay/types';
+import { Typo } from '@/components/ui/typography';
+import { useAuth } from '@/hooks/use-auth';
+import { resetApp } from '@/lib/app';
+import { message } from '@tauri-apps/plugin-dialog';
+import { ShieldQuestion } from 'lucide-react';
+import { useCallback } from 'react';
+import { centered, iconWrapper } from './styles/reset-confirm.css';
+export function MyProfileResetConfirmDrawer(props: OverlayProps) {
+	const { close } = props;
+	const authenticate = useAuth();
+	const onClickReset = useCallback(async () => {
+		try {
+			authenticate(async () => {
+				await resetApp();
+				location.reload();
+			});
+		} catch (error) {
+			await message('초기화에 실패했어요. 잠시 후 다시 시도해 주세요.');
+			console.error('Reset failed:', error);
+			close();
+		}
+	}, [authenticate, close]);
 	return (
-		<img
-			className={cn(avatar, className)}
-			src={src || '/profile.png'}
-			alt='Avatar'
-			style={{
-				width: size,
-				height: size,
-			}}
-			onClick={onClick}
-		/>
+		<Drawer {...props}>
+			<Container horizontal='none'>
+				<Container className={centered} vertical='regular'>
+					<div className={iconWrapper}>
+						<ShieldQuestion />
+					</div>
+				</Container>
+				<Container className={centered} vertical='small'>
+					<Typo.Lead weight='strong'>정말 초기화할까요?</Typo.Lead>
+				</Container>
+				<Container className={centered} vertical='none'>
+					<Typo.Body>모든 데이터가 삭제되고 로그아웃돼요.</Typo.Body>
+				</Container>
+			</Container>
+			<ButtonGroup direction='horizontal'>
+				<Button fill onClick={onClickReset}>
+					초기화
+				</Button>
+				<Button fill variant='secondary' onClick={close}>
+					취소
+				</Button>
+			</ButtonGroup>
+		</Drawer>
 	);
 }
 ````
@@ -6474,72 +6636,6 @@ export function ButtonGroup(props: ButtonGroupProps) {
 }
 ````
 
-## File: src/components/ui/card/styles.css.ts
-````typescript
-import { color } from '@/styles/color.css';
-import { uiStyle } from '@/styles/layer.css';
-export const card = uiStyle({
-	width: '100%',
-	backgroundColor: color.cream,
-	borderRadius: 16,
-	overflow: 'hidden',
-	userSelect: 'none',
-	WebkitUserSelect: 'none',
-	transition: 'transform 0.2s ease-in-out, filter 0.2s ease-in-out',
-	':active': {
-		transform: 'scale(0.98)',
-		filter: 'brightness(0.9)',
-	},
-});
-export const content = uiStyle({
-	width: '100%',
-	height: 120,
-});
-export const preventOverflow = uiStyle({
-	width: '100%',
-	overflow: 'hidden',
-	textOverflow: 'ellipsis',
-	whiteSpace: 'nowrap',
-});
-export const title = uiStyle([preventOverflow]);
-export const preview = uiStyle([
-	preventOverflow,
-	{
-		opacity: 0.7,
-	},
-]);
-````
-
-## File: src/components/ui/drawer/styles.css.ts
-````typescript
-import { color } from '@/styles/color.css';
-import { uiStyle } from '@/styles/layer.css';
-export const drawer = uiStyle({
-	position: 'fixed',
-	bottom: 0,
-	left: 0,
-	width: '100%',
-	minHeight: 200,
-	backgroundColor: color.milk,
-	paddingBottom: 'env(safe-area-inset-bottom)',
-	borderRadius: '32px 32px 0px 0px',
-	boxShadow: '0px 0px 24px 8px rgba(0, 0, 0, 0.10)',
-	'::after': {
-		content: '""',
-		position: 'absolute',
-		width: '100%',
-		height: 1000,
-		backgroundColor: color.milk,
-	},
-});
-export const handle = uiStyle({
-	width: 60,
-	height: 5,
-	backgroundColor: color.sand,
-	borderRadius: 1000,
-});
-````
-
 ## File: src/components/ui/list/compact/item.tsx
 ````typescript
 import { Column } from '@/components/layout/column';
@@ -6571,31 +6667,79 @@ export function CompactListItem(props: CompactListItemProps) {
 }
 ````
 
-## File: src/components/ui/loading-circle/styles.css.ts
+## File: src/components/ui/overlay/renderer.tsx
 ````typescript
-import { uiStyle } from '@/styles/layer.css';
-import { keyframes } from '@vanilla-extract/css';
-const loading = keyframes({
-	'0%': {
-		transform: 'rotate(0deg)',
+import { getTransition } from '@/lib/animation';
+import { type Variants, motion } from 'motion/react';
+import { type MouseEvent, useCallback } from 'react';
+import { backdrop } from './styles/backdrop.css';
+import type { OverlayContent } from './types';
+const backdropVariants: Variants = {
+	hidden: {
+		opacity: 0,
+		transition: getTransition(),
 	},
-	'100%': {
-		transform: 'rotate(360deg)',
+	visible: {
+		opacity: 1,
+		transition: getTransition(),
 	},
-});
-export const wrapper = uiStyle({});
-export const loaderCircle = uiStyle({
-	aspectRatio: '1 / 1',
-	animation: `${loading} 1s linear infinite`,
-});
+};
+interface OverlayRendererProps {
+	content: OverlayContent;
+	close: () => void;
+}
+export function OverlayRenderer(props: OverlayRendererProps) {
+	const { content, close } = props;
+	const { render: Render, options } = content;
+	const onClickBackdrop = useCallback(
+		(e: MouseEvent) => {
+			e.stopPropagation();
+			if (options?.onClickBackdrop) {
+				options.onClickBackdrop();
+			}
+			if (!options?.preventBackdropClose) {
+				close();
+			}
+		},
+		[close, options],
+	);
+	return (
+		<>
+			<motion.div
+				className={backdrop}
+				variants={backdropVariants}
+				initial='hidden'
+				animate='visible'
+				exit='hidden'
+				onClick={onClickBackdrop}
+			/>
+			<Render key={content.id} close={close} />
+		</>
+	);
+}
 ````
 
-## File: src/components/ui/overlay/utils.ts
+## File: src/components/ui/overlay/types.ts
 ````typescript
-import type { OverlayContent } from './types';
-export function isContentSaved(id: string, contents: Array<OverlayContent>) {
-	return contents.some((content) => content.id === id);
+import type { ComponentType } from 'react';
+export interface OverlayProps {
+	close: () => void;
 }
+export type Renderer<T = object> = (props: T & OverlayProps) => React.ReactNode;
+export type OverlayContent = {
+	id: string;
+	render: Renderer;
+	options?: OverlayOptions;
+};
+export type OverlayOptions = {
+	onClickBackdrop?: () => unknown;
+	preventBackdropClose?: boolean;
+};
+export type PropsOf<Component> = Component extends ComponentType<infer P>
+	? P extends OverlayProps
+		? P
+		: never
+	: never;
 ````
 
 ## File: src/components/ui/popup/animation.ts
@@ -6640,70 +6784,267 @@ export function useCheckInitialized() {
 }
 ````
 
-## File: src/hooks/use-diary.ts
+## File: src/lib/managers/file.ts
 ````typescript
-import { diaryManager } from '@/lib/managers/diary';
-import { storageClient } from '@/lib/managers/storage';
-import type { Weather } from '@/lib/weather';
-import { useCallback, useState } from 'react';
-export function useDiary(uuid: string | null) {
-	const [diary, setDiary] = useState(() => getDiaryOrCreate(uuid));
-	const setEmoji = useCallback((emoji: string) => {
-		setDiary((prev) => ({
-			...prev,
-			emoji,
-		}));
-	}, []);
-	const setTitle = useCallback((title: string) => {
-		setDiary((prev) => ({
-			...prev,
-			title,
-		}));
-	}, []);
-	const setContent = useCallback((content: string) => {
-		setDiary((prev) => ({
-			...prev,
-			content,
-		}));
-	}, []);
-	const setLocation = useCallback((location: string) => {
-		setDiary((prev) => ({
-			...prev,
-			location,
-		}));
-	}, []);
-	const setWeather = useCallback((weather: Weather) => {
-		setDiary((prev) => ({
-			...prev,
-			weather,
-		}));
-	}, []);
-	return [
-		diary,
-		{ setEmoji, setTitle, setContent, setLocation, setWeather, setDiary },
-	] as const;
+export interface FileMetadata {
+	name: string;
+	type: string;
+	lastModified: number;
+	size: number;
 }
-function getDiaryOrCreate(uuid?: string | null) {
-	if (!storageClient.isInitialized) {
-		return diaryManager.createDiary();
+export interface StoredFileData {
+	metadata: FileMetadata;
+	blob: Blob;
+}
+class FileStorage {
+	private db: IDBDatabase | null = null;
+	constructor(
+		private readonly dbName: string = 'FileStorage',
+		private readonly storeName: string = 'files',
+		private readonly version: number = 1,
+	) {}
+	private openRequest<T>(request: IDBRequest<T>): Promise<T> {
+		return new Promise((resolve, reject) => {
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
 	}
-	if (uuid) {
-		const data = diaryManager.getDiary(uuid);
-		if (!data) {
-			throw new Error('Diary not found');
+	private getDatabase() {
+		if (!this.db) {
+			throw new Error('Database is not initialized. Call init() first.');
 		}
-		return data;
+		return this.db;
 	}
-	return diaryManager.createDiary();
+	async init() {
+		const openReq = indexedDB.open(this.dbName, this.version);
+		openReq.onupgradeneeded = () => {
+			const database = openReq.result;
+			if (!database.objectStoreNames.contains(this.storeName)) {
+				database.createObjectStore(this.storeName);
+			}
+		};
+		this.db = await this.openRequest(openReq);
+	}
+	private transaction(mode: IDBTransactionMode) {
+		const database = this.getDatabase();
+		const tx = database.transaction(this.storeName, mode);
+		return tx.objectStore(this.storeName);
+	}
+	async saveFile(key: string, file: File) {
+		const store = this.transaction('readwrite');
+		const data: StoredFileData = {
+			metadata: {
+				name: file.name,
+				type: file.type,
+				lastModified: file.lastModified,
+				size: file.size,
+			},
+			blob: file,
+		};
+		await this.openRequest(store.put(data, key));
+	}
+	async getFile(key: string) {
+		const store = this.transaction('readonly');
+		const result = await this.openRequest<StoredFileData | undefined>(
+			store.get(key),
+		);
+		if (!result) {
+			return null;
+		}
+		const { metadata, blob } = result;
+		return new File([blob], metadata.name, {
+			type: metadata.type,
+			lastModified: metadata.lastModified,
+		});
+	}
+	async listFiles() {
+		const store = this.transaction('readonly');
+		const [keys, values] = await Promise.all([
+			this.openRequest<IDBValidKey[]>(store.getAllKeys()),
+			this.openRequest<StoredFileData[]>(store.getAll()),
+		]);
+		return values.map((data, index) => ({
+			key: String(keys[index]),
+			metadata: data.metadata,
+		}));
+	}
+	async deleteFile(key: string) {
+		const store = this.transaction('readwrite');
+		await this.openRequest(store.delete(key));
+	}
+	async clear() {
+		const store = this.transaction('readwrite');
+		await this.openRequest(store.clear());
+	}
+}
+export const fileStorage = new FileStorage('Sotto', 'attachments', 1);
+````
+
+## File: src/lib/managers/http.ts
+````typescript
+import { log } from '../log';
+interface APIResponse<T> {
+	status: number;
+	message: string;
+	data: T | null;
+	responseAt: string;
+}
+const DEFAULT_API_URL = 'http://localhost:3000' as const;
+const fetch = window.fetch;
+class APIClient {
+	constructor(private baseUrl: string) {
+		if (baseUrl === DEFAULT_API_URL) {
+			log(
+				'warn',
+				'Using default API URL. Make sure to set the VITE_API_URL environment variable in production.',
+			);
+		}
+	}
+	private async request<T>(
+		path: string,
+		method: string,
+		body?: unknown,
+	): Promise<T> {
+		const url = new URL(path, this.baseUrl).toString();
+		const accessToken = localStorage.getItem('accessToken') || null;
+		try {
+			const response = await fetch(url, {
+				method,
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: accessToken ? `Bearer ${accessToken}` : '',
+				},
+				body: isBodyContainable(method) ? JSON.stringify(body) : undefined,
+			});
+			console.log(new Date().toISOString(), 'API Request', method, url, body);
+			const data: APIResponse<T> = await response.json();
+			console.log(new Date().toISOString(), 'API Response', method, url, data);
+			if (!response.ok || data.data === null) {
+				throw new Error(data.message);
+			}
+			return data.data;
+		} catch (error) {
+			console.error('API request failed:', error);
+			return Promise.reject(error);
+		}
+	}
+	async get<T>(path: string): Promise<T> {
+		return this.request<T>(path, 'GET');
+	}
+	async post<T>(path: string, data: unknown): Promise<T> {
+		return this.request<T>(path, 'POST', data);
+	}
+	async put<T>(path: string, data: unknown): Promise<T> {
+		return this.request<T>(path, 'PUT', data);
+	}
+	async patch<T>(path: string, data: unknown): Promise<T> {
+		return this.request<T>(path, 'PATCH', data);
+	}
+	async delete<T>(path: string): Promise<T> {
+		return this.request<T>(path, 'DELETE');
+	}
+}
+export const apiClient = new APIClient(
+	import.meta.env.VITE_API_URL || DEFAULT_API_URL,
+);
+function isBodyContainable(method: string): boolean {
+	return (
+		method === 'POST' ||
+		method === 'PUT' ||
+		method === 'PATCH' ||
+		method === 'DELETE'
+	);
 }
 ````
 
-## File: src/hooks/use-drawer.ts
+## File: src/routes/auth/sign-up/index.tsx
 ````typescript
-import type { Renderer } from '@/components/ui/overlay/types';
-import { useOverlay } from './use-overlay';
-export function useDrawer<T extends object>(renderer: Renderer<T>) {
-	return useOverlay(renderer, {});
+import { generateKeyPair } from '@/binding/function/generate-key-pair';
+import { SignUpBiometricSection } from '@/components/pages/sign-up/biometric';
+import { SignUpConfirmPinSection } from '@/components/pages/sign-up/confirm-pin';
+import { SignUpFlowContext } from '@/components/pages/sign-up/context';
+import { SignUpInformationSection } from '@/components/pages/sign-up/information';
+import { SignUpSetPinSection } from '@/components/pages/sign-up/set-pin';
+import { Flow } from '@/components/ui/flow';
+import { processSignIn } from '@/lib/app';
+import { log } from '@/lib/log';
+import { apiClient } from '@/lib/managers/http';
+import { storageClient } from '@/lib/managers/storage';
+import { message } from '@tauri-apps/plugin-dialog';
+import { useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { saveItem } from 'tauri-plugin-keychain';
+export default function SignUpPage() {
+	const [profileImage, setProfileImage] = useState<string | null>(null);
+	const [name, setName] = useState<string>('');
+	const [username, setUsername] = useState<string>('');
+	const [pin, setPin] = useState<string>('');
+	const [confirmPin, setConfirmPin] = useState<string>('');
+	const [useBiometricLogin, setUseBiometricLogin] = useState<boolean>(false);
+	const navigate = useNavigate();
+	const onClickSignUp = useCallback(
+		async (biometricLogin: boolean) => {
+			setUseBiometricLogin(biometricLogin);
+			const { publicKeyPem, privateKeyPem } = await generateKeyPair();
+			try {
+				await storageClient.init(pin);
+				await saveItem('sotto-app', pin);
+				const { accessToken, user } = await apiClient.post<SignUpResponse>(
+					'/users',
+					{
+						name,
+						username,
+						profileUrl: profileImage,
+						publicKey: publicKeyPem,
+					},
+				);
+				storageClient.set('publicKey', publicKeyPem);
+				storageClient.set('privateKey', privateKeyPem);
+				if (profileImage) {
+					localStorage.setItem('profileImage', profileImage);
+				}
+				localStorage.setItem('app-initialized', 'true');
+				localStorage.setItem('accessToken', accessToken);
+				localStorage.setItem('username', username);
+				localStorage.setItem('name', name);
+				localStorage.setItem('useBiometricLogin', biometricLogin.toString());
+				await message(`회원가입이 완료되었습니다! 환영합니다 ${user.name}`);
+				await processSignIn(pin);
+				navigate('/home');
+			} catch (error) {
+				await message(`회원가입에 실패했습니다. ${error}`, { kind: 'error' });
+				log('error', 'Sign up failed', error);
+			}
+		},
+		[name, username, profileImage, pin, navigate],
+	);
+	return (
+		<SignUpFlowContext
+			value={{
+				profileImage,
+				name,
+				username,
+				pin,
+				confirmPin,
+				useBiometricLogin,
+				setProfileImage,
+				setName,
+				setUsername,
+				setPin,
+				setConfirmPin,
+				setUseBiometricLogin,
+			}}
+		>
+			<Flow
+				pages={[
+					<SignUpInformationSection key='information' />,
+					<SignUpSetPinSection key='set-pin' />,
+					<SignUpConfirmPinSection key='confirm-pin' />,
+					<SignUpBiometricSection key='biometric' signUp={onClickSignUp} />,
+				]}
+			/>
+		</SignUpFlowContext>
+	);
 }
 ````
 
@@ -6724,11 +7065,11 @@ export default function ExplorerLocationAliasPage() {
 	return (
 		<>
 			<TopNavigator
-				leadingArea={<GoBack label='Profile' />}
+				leadingArea={<GoBack label='프로필' />}
 				trailingArea={<Plus onClick={openAddAlias} />}
 			/>
 			<ExplorerHeader
-				title='Location Alias'
+				title='위치 별칭'
 				count={locationManager.getSavedCount()}
 			/>
 			<ExplorerLocationAliasPresets />
@@ -6739,34 +7080,101 @@ export default function ExplorerLocationAliasPage() {
 }
 ````
 
-## File: src-tauri/capabilities/default.json
-````json
-{
-	"$schema": "../gen/schemas/desktop-schema.json",
-	"identifier": "default",
-	"description": "Capability for the main window",
-	"windows": ["main"],
-	"permissions": [
-		"core:default",
-		"opener:default",
-		"dialog:default",
-		"fs:default",
-		"keychain:default",
-		"stronghold:default",
-		"log:default",
-		"clipboard-manager:allow-write-text",
-		{
-			"identifier": "http:default",
-			"allow": [
-				{
-					"url": "http://localhost:3000"
-				},
-				{
-					"url": "https://sotto-api.tapie.kr"
-				}
-			]
-		}
-	]
+## File: src/styles/reset.css.ts
+````typescript
+import { color } from './color.css';
+import { resetGlobalStyle } from './layer.css';
+resetGlobalStyle('html, body, #root', {
+	width: '100%',
+	height: 'var(--vh, 100vh)',
+	backgroundColor: color.milk,
+	color: color.mud,
+	wordBreak: 'keep-all',
+	wordWrap: 'break-word',
+	textWrap: 'pretty',
+});
+resetGlobalStyle('*', {
+	boxSizing: 'border-box',
+	margin: 0,
+	padding: 0,
+	fontSynthesis: 'none',
+	WebkitFontSmoothing: 'antialiased',
+	textRendering: 'optimizeLegibility',
+	shapeRendering: 'geometricPrecision',
+	WebkitTapHighlightColor: 'rgba(0, 0, 0, 0)',
+	userSelect: 'none',
+	WebkitUserSelect: 'none',
+});
+resetGlobalStyle('*:focus', { outline: 'none' });
+resetGlobalStyle('a', {
+	width: '100%',
+	color: 'inherit',
+	cursor: 'pointer',
+	textDecoration: 'none',
+});
+resetGlobalStyle('svg', {
+	flexShrink: 0,
+});
+resetGlobalStyle('input, textarea, button', {
+	fontFamily: 'inherit',
+	color: 'inherit',
+	background: 'transparent',
+	border: 'none',
+	outline: 'none',
+});
+resetGlobalStyle('input::placeholder, textarea::placeholder', {
+	color: color.sand,
+});
+resetGlobalStyle('::-webkit-scrollbar', { display: 'none' });
+````
+
+## File: src/types/diary.d.ts
+````typescript
+interface Diary {
+	uuid: string;
+	shareUUID: string | null;
+	sharedBy: string | null;
+	emoji: string;
+	title: string;
+	content: string;
+	location?: string;
+	weather?: Weather;
+	attachments: Array<Attachment>;
+	sharedWith: Array<string>;
+	encryptedData: string | null;
+	aesKey: string | null;
+	encryptedKey: string | null;
+	nonce: string | null;
+	readonly: boolean;
+	isSharedViaURL: boolean;
+	createdAt: Date;
+	updatedAt: Date;
+}
+interface DiaryEditable {
+	emoji: string;
+	title: string;
+	content: string;
+}
+interface Reply extends ReplyData {
+	uuid: string;
+	diaryId: string;
+	authorId: string;
+	createdAt: Date;
+}
+````
+
+## File: src-tauri/gen/android/app/src/main/java/com/tyeongkim/sotto_app/MainActivity.kt
+````kotlin
+package com.tyeongkim.sotto_app
+import android.graphics.Color
+import android.os.Bundle
+import androidx.core.view.WindowCompat
+class MainActivity : TauriActivity() {
+  override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    WindowCompat.setDecorFitsSystemWindows(window, false)
+    window.statusBarColor = Color.rgb(243,238, 234);
+  }
 }
 ````
 
@@ -6860,44 +7268,6 @@ dependencies {
 apply(from = "tauri.build.gradle.kts")
 ````
 
-## File: src-tauri/src/lib.rs
-````rust
-use tauri::Manager;
-mod crypto;
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_log::Builder::new().build())
-        .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_keychain::init())
-        .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![
-            crypto::generate_key_pair,
-            crypto::encrypt_json,
-            crypto::encrypt_key_for_recipient,
-            crypto::decrypt_json,
-            crypto::decrypt_diary,
-            crypto::decrypt_reply,
-        ])
-        .setup(|app| {
-            #[cfg(any(target_os = "android", target_os = "ios"))]
-            app.handle().plugin(tauri_plugin_biometric::init());
-            let salt_path = app
-                .path()
-                .app_local_data_dir()
-                .expect("Failed to get app local data dir")
-                .join("sotto_salt.txt");
-            app.handle().plugin(tauri_plugin_stronghold::Builder::with_argon2(&salt_path).build())?;
-            Ok(())
-        })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
-}
-````
-
 ## File: .gitignore
 ````
 # Logs
@@ -6930,6 +7300,43 @@ keystore.properties
 *.sw?
 ````
 
+## File: README.md
+````markdown
+<div align="center">
+  <img src="./assets/icon.png" alt="Sotto Symbol">
+
+  # Sotto
+  Write your diary, share with friends safely
+  ---
+
+  <img src="./assets/mockups.png" alt="Mockups">
+</div>
+
+# Features
+### 🔒 Highly Secured
+All data will be stored in your local device using [IOTA Stronghold](https://github.com/iotaledger/stronghold.rs).
+
+When sharing data, Asymmetric encryption will be applied (RSA for data, AES for key sharing).
+
+You can also lock the app using biometric or PIN login.
+
+### 👥 Sharing
+You can share your diaries to your friends easily only with a few touch.
+
+# Download
+This app cannot run on real iPhone because I don't have Apple Developer Program ($99 per year).
+
+- [Android (10+)](https://github.com/cottons-kr/sotto-app/releases/download/1.0/Sotto-Android.zip)
+- [iOS **(Simulator only)**](https://github.com/cottons-kr/sotto-app/releases/download/1.0/Sotto-iOS-Simulator.zip)
+
+# Others
+- [`sotto-api`](https://github.com/cottons-kr/sotto-api)
+- [`sotto-web`](https://github.com/cottons-kr/sotto-web)
+
+# License
+[MIT](https://github.com/cottons-kr/sotto-app/blob/main/LICENSE.md)
+````
+
 ## File: repomix.config.json
 ````json
 {
@@ -6951,42 +7358,159 @@ keystore.properties
 }
 ````
 
-## File: vite.config.ts
+## File: src/components/features/attachment/upload-popup.tsx
 ````typescript
-import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
-import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
-const host = process.env.TAURI_DEV_HOST;
-export default defineConfig(async () => ({
-	plugins: [react(), vanillaExtractPlugin()],
-	clearScreen: false,
-	resolve: {
-		alias: {
-			'@': '/src',
-		},
-	},
-	server: {
-		port: 1420,
-		strictPort: true,
-		host: host || false,
-		hmr: host
-			? {
-					protocol: 'ws',
-					host,
-					port: 1421,
-				}
-			: undefined,
-		watch: {
-			ignored: ['**/src-tauri/**'],
-		},
-		warmup: {
-			clientFiles: ['./src/**/*.css.ts'],
-		},
-	},
-	envPrefix: ['VITE_', 'TAURI_ENV_'],
-	minify: !process.env.TAURI_ENV_DEBUG ? 'esbuild' : false,
-	sourcemap: !!process.env.TAURI_ENV_DEBUG,
-}));
+import { encryptData } from '@/binding/function/encrypt-data';
+import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button/group';
+import type { OverlayProps } from '@/components/ui/overlay/types';
+import { Popup } from '@/components/ui/popup';
+import { PopupContent } from '@/components/ui/popup/content';
+import { apiClient } from '@/lib/managers/http';
+import { CloudUpload } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+interface AttachmentUploadPopupProps {
+	diary: Diary;
+	attachments: Array<File>;
+}
+export function AttachmentUploadPopup(
+	props: AttachmentUploadPopupProps & OverlayProps,
+) {
+	const { attachments, close } = props;
+	const [order, setOrder] = useState(0);
+	const [status, setStatus] = useState('Encrypting');
+	const [isCancelled, setIsCancelled] = useState(false);
+	const onClickCancel = useCallback(() => {
+		setIsCancelled(true);
+		close();
+	}, [close]);
+	const uploadAttachment = useCallback(async (file: File) => {
+		setStatus('Encrypting');
+		const base64Data = await file
+			.arrayBuffer()
+			.then((buffer) => Buffer.from(buffer).toString('base64'));
+		const [, /* aesKey */ /* nonce */ ,] = await encryptData(base64Data);
+		setStatus('Uploading');
+		await apiClient.get('/attachments/presigned-url');
+	}, []);
+	useEffect(() => {
+		const uploadNext = async () => {
+			const file = attachments[order];
+			await uploadAttachment(file);
+			if (order >= attachments.length - 1 || isCancelled) {
+				close();
+				return;
+			}
+			setOrder((prev) => prev + 1);
+		};
+		uploadNext();
+	}, [attachments, close, order, uploadAttachment, isCancelled]);
+	return (
+		<Popup>
+			<PopupContent
+				icon={<CloudUpload />}
+				title='첨부파일 업로드 중...'
+				description={`${order + 1} / ${attachments.length} - ${status}`}
+			/>
+			<ButtonGroup smallPadding>
+				<Button fill variant='secondary' onClick={onClickCancel}>
+					취소
+				</Button>
+			</ButtonGroup>
+		</Popup>
+	);
+}
+````
+
+## File: src/components/features/diary/delete-popup.tsx
+````typescript
+import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button/group';
+import type { OverlayProps } from '@/components/ui/overlay/types';
+import { Popup } from '@/components/ui/popup';
+import { PopupContent } from '@/components/ui/popup/content';
+import { useAuth } from '@/hooks/use-auth';
+import { log } from '@/lib/log';
+import { diaryManager } from '@/lib/managers/diary';
+import { message } from '@tauri-apps/plugin-dialog';
+import { TriangleAlert } from 'lucide-react';
+import { useCallback } from 'react';
+interface DeleteDiaryPopupProps {
+	diary: Diary;
+	callback: () => unknown;
+}
+export function DeleteDiaryPopup(props: DeleteDiaryPopupProps & OverlayProps) {
+	const { diary, callback, close } = props;
+	const authenticate = useAuth();
+	const onClickDelete = useCallback(() => {
+		authenticate(async () => {
+			try {
+				await diaryManager.removeDiary(diary.uuid);
+				await callback();
+			} catch (error) {
+				log('error', 'Failed to delete diary:', error);
+				await message('일기 삭제에 실패했습니다.');
+			} finally {
+				close();
+			}
+		});
+	}, [authenticate, diary, close, callback]);
+	return (
+		<Popup>
+			<PopupContent
+				icon={<TriangleAlert />}
+				title='일기를 삭제할까요?'
+				description='삭제된 일기는 복구할 수 없어요'
+			/>
+			<ButtonGroup direction='horizontal' smallPadding>
+				<Button fill onClick={onClickDelete}>
+					삭제
+				</Button>
+				<Button fill variant='secondary' onClick={close}>
+					취소
+				</Button>
+			</ButtonGroup>
+		</Popup>
+	);
+}
+````
+
+## File: src/components/features/diary/in-date-drawer.tsx
+````typescript
+import { Container } from '@/components/layout/container';
+import { Grid } from '@/components/layout/grid';
+import { Row } from '@/components/layout/row';
+import { DiaryCard } from '@/components/ui/card/diary';
+import { Drawer } from '@/components/ui/drawer';
+import type { OverlayProps } from '@/components/ui/overlay/types';
+import { Typo } from '@/components/ui/typography';
+import type { Dayjs } from 'dayjs';
+import { list } from './styles/in-date-drawer.css';
+interface DiaryInDateDrawerProps {
+	day: Dayjs;
+	diaries: Array<Diary>;
+}
+export function DiaryInDateDrawer(
+	props: DiaryInDateDrawerProps & OverlayProps,
+) {
+	const { day, diaries, close } = props;
+	return (
+		<Drawer close={close}>
+			<Container vertical='small'>
+				<Row justify='center'>
+					<Typo.Body weight='strong'>{day.format('YYYY/MM/DD')}</Typo.Body>
+				</Row>
+			</Container>
+			<Container className={list}>
+				<Grid>
+					{diaries.map((d) => (
+						<DiaryCard key={d.uuid} diary={d} />
+					))}
+				</Grid>
+			</Container>
+		</Drawer>
+	);
+}
 ````
 
 ## File: src/components/features/diary/weather-drawer.tsx
@@ -7014,7 +7538,7 @@ export function DiaryWeatherDrawer(
 	const { setWeather, close } = props;
 	return (
 		<Drawer close={close}>
-			<DrawerTitle>Add weather</DrawerTitle>
+			<DrawerTitle>날씨 추가</DrawerTitle>
 			<Container>
 				<div className={grid}>
 					{weatherList.map((w) => (
@@ -7048,92 +7572,146 @@ function Item(props: ItemProps) {
 }
 ````
 
-## File: src/components/layout/container/index.tsx
+## File: src/components/features/reply/send-drawer.tsx
 ````typescript
-import type { BaseProps, HAS_CHILDREN } from '@/types/props';
-import { type JSX, useRef } from 'react';
-interface ContainerProps extends BaseProps<HAS_CHILDREN> {
-	as?: keyof JSX.IntrinsicElements;
-	vertical?: Padding;
-	horizontal?: Padding;
-	onClick?: () => unknown;
-	onLongPress?: () => unknown;
+import { encryptData } from '@/binding/function/encrypt-data';
+import { encryptKeyForRecipient } from '@/binding/function/encrypt-key-for-recipient';
+import { Column } from '@/components/layout/column';
+import { Container } from '@/components/layout/container';
+import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button/group';
+import { Drawer } from '@/components/ui/drawer';
+import { DrawerTitle } from '@/components/ui/drawer/title';
+import { EmojiInput } from '@/components/ui/input/emoji';
+import type { OverlayProps } from '@/components/ui/overlay/types';
+import { log } from '@/lib/log';
+import { friendManager } from '@/lib/managers/friend';
+import { apiClient } from '@/lib/managers/http';
+import { fullHeight } from '@/styles/utils.css';
+import { message } from '@tauri-apps/plugin-dialog';
+import { useCallback, useState } from 'react';
+import { textArea, wrapper } from './styles/send-reply-drawer.css';
+interface ReplySendDrawerProps {
+	diary: Diary;
 }
-type Padding = 'none' | 'small' | 'regular' | 'medium' | 'large';
-const paddingMap: Record<Padding, string> = {
-	none: '0',
-	small: '8px',
-	regular: '12px',
-	medium: '16px',
-	large: '24px',
-};
-export function Container(props: ContainerProps) {
-	const {
-		as: Component = 'div',
-		vertical = 'medium',
-		horizontal = 'medium',
-		onClick,
-		onLongPress,
-		...rest
-	} = props;
-	const timeoutRef = useRef<number | null>(null);
-	const longPressedRef = useRef(false);
-	const handlePressStart = () => {
-		longPressedRef.current = false;
-		timeoutRef.current = window.setTimeout(() => {
-			longPressedRef.current = true;
-			onLongPress?.();
-		}, 350);
-	};
-	const handlePressEnd = () => {
-		if (timeoutRef.current !== null) {
-			clearTimeout(timeoutRef.current);
+export function ReplySendDrawer(props: ReplySendDrawerProps & OverlayProps) {
+	const { diary, close } = props;
+	const [emoji, setEmoji] = useState('');
+	const [content, setContent] = useState('');
+	const [isSending, setIsSending] = useState(false);
+	const onClickSend = useCallback(async () => {
+		if (!content) {
+			await message('메시지를 입력해 주세요');
+			return;
 		}
-		if (!longPressedRef.current) {
-			onClick?.();
+		const user = friendManager.getFriend(diary.sharedBy || '');
+		if (!user) {
+			await message('사용자를 찾을 수 없어요');
+			return;
 		}
-		longPressedRef.current = false;
-	};
+		try {
+			setIsSending(true);
+			const [data, key, nonce] = await encryptData({ emoji, content });
+			const encryptedKey = await encryptKeyForRecipient(user.publicKey, key);
+			await apiClient.post('/replies', {
+				diaryId: diary.uuid,
+				data,
+				nonce,
+				encryptedKey,
+			});
+			close();
+		} catch (error) {
+			log('error', 'Failed to send reply', error);
+			await message(`답글 전송에 실패했어요: ${error}`);
+			return;
+		} finally {
+			setIsSending(false);
+		}
+	}, [diary, emoji, content, close]);
 	return (
-		<Component
-			{...rest}
-			{...(onLongPress
-				? {
-						onMouseDown: handlePressStart,
-						onTouchStart: handlePressStart,
-						onMouseUp: handlePressEnd,
-						onMouseLeave: handlePressEnd,
-						onTouchEnd: handlePressEnd,
-						onTouchCancel: handlePressEnd,
-					}
-				: { onClick })}
-			style={{
-				padding: `${paddingMap[vertical]} ${paddingMap[horizontal]}`,
-			}}
-		/>
+		<Drawer close={close}>
+			<DrawerTitle>답글 보내기</DrawerTitle>
+			<Container vertical='small'>
+				<Container className={wrapper} horizontal='regular'>
+					<Column className={fullHeight} gap={12}>
+						<EmojiInput defaultValue={emoji} onValue={setEmoji} />
+						<textarea
+							className={textArea}
+							placeholder='짧은 메시지를 적어보세요'
+							value={content}
+							onChange={(e) => setContent(e.target.value)}
+						/>
+					</Column>
+				</Container>
+			</Container>
+			<ButtonGroup>
+				<Button fill onClick={onClickSend} loading={isSending}>
+					보내기
+				</Button>
+			</ButtonGroup>
+		</Drawer>
 	);
 }
 ````
 
-## File: src/components/pages/diary/saving-popup.tsx
+## File: src/components/pages/diary/styles/additional-info.css.ts
 ````typescript
-import { Column } from '@/components/layout/column';
-import { Container } from '@/components/layout/container';
-import { LoadingCircle } from '@/components/ui/loading-circle';
-import { Popup } from '@/components/ui/popup';
-import { Typo } from '@/components/ui/typography';
-export function DiarySavingPopup() {
-	return (
-		<Popup fill={false}>
-			<Container vertical='small'>
-				<Column align='center' gap={12}>
-					<LoadingCircle size={48} />
-					<Typo.Body>Saving</Typo.Body>
-				</Column>
-			</Container>
-		</Popup>
-	);
-}
+import { color } from '@/styles/color.css';
+import { uiStyle } from '@/styles/layer.css';
+export const item = uiStyle({
+	width: '100%',
+	padding: '12px 0',
+	backgroundColor: color.cream,
+	borderRadius: 16,
+});
+````
+
+## File: src/components/pages/diary/styles/attachments.css.ts
+````typescript
+import { color } from '@/styles/color.css';
+import { uiStyle } from '@/styles/layer.css';
+export const list = uiStyle({
+	width: '100%',
+	height: 148,
+	minHeight: 148,
+	overflowX: 'auto',
+});
+export const input = uiStyle({
+	width: 0,
+	height: 0,
+	position: 'absolute',
+	top: -9999,
+	left: -9999,
+});
+export const image = uiStyle({
+	width: '100%',
+	height: '100%',
+	objectFit: 'cover',
+	userSelect: 'none',
+	WebkitUserModify: 'read-only',
+	WebkitTouchCallout: 'none',
+});
+export const item = uiStyle({
+	width: 160,
+	height: 100,
+	backgroundColor: color.cream,
+	flexShrink: 0,
+	borderRadius: 16,
+	overflow: 'hidden',
+});
+````
+
+## File: src/components/pages/diary/context.ts
+````typescript
+import type { useDiary } from '@/hooks/use-diary';
+import { type Dispatch, type SetStateAction, createContext } from 'react';
+type DiaryContextType = {
+	diary: Diary;
+	diaryDispatch: ReturnType<typeof useDiary>[1];
+	isAttachmentUpdated: boolean;
+	setIsAttachmentUpdated: Dispatch<SetStateAction<boolean>>;
+};
+export const DiaryContext = createContext({} as DiaryContextType);
 ````
 
 ## File: src/components/pages/explorer/location-alias/presets.tsx
@@ -7185,7 +7763,7 @@ function Item(props: ItemProps) {
 						{locationManager.getPresetName(name)}
 					</Typo.Lead>
 					<Typo.Body color={color.sand}>
-						{location?.address || 'Click to add'}
+						{location?.address || '눌러서 추가하기'}
 					</Typo.Body>
 				</Column>
 			</Column>
@@ -7250,7 +7828,7 @@ export function HomeBottomNavigator() {
 						<Row gap={8}>
 							<ViewButton
 								icon={<LayoutGrid size={20} />}
-								label='List'
+								label='리스트'
 								value='list'
 							/>
 							<button
@@ -7262,7 +7840,7 @@ export function HomeBottomNavigator() {
 							</button>
 							<ViewButton
 								icon={<CalendarDays size={20} />}
-								label='Calendar'
+								label='캘린더'
 								value='calendar'
 							/>
 						</Row>
@@ -7295,6 +7873,67 @@ function ViewButton(props: ViewButtonProps) {
 			{icon}
 			<Typo.Body weight='medium'>{label}</Typo.Body>
 		</Row>
+	);
+}
+````
+
+## File: src/components/pages/my-profile/change-name.tsx
+````typescript
+import { Container } from '@/components/layout/container';
+import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button/group';
+import { Drawer } from '@/components/ui/drawer';
+import { DrawerTitle } from '@/components/ui/drawer/title';
+import { Input } from '@/components/ui/input';
+import type { OverlayProps } from '@/components/ui/overlay/types';
+import { log } from '@/lib/log';
+import { apiClient } from '@/lib/managers/http';
+import { message } from '@tauri-apps/plugin-dialog';
+import { useCallback, useState } from 'react';
+export function MyProfileChangeNameDrawer(props: OverlayProps) {
+	const { close } = props;
+	const [name, setName] = useState(localStorage.getItem('name') || '');
+	const onClickChange = useCallback(async () => {
+		const prevName = localStorage.getItem('name');
+		if (prevName === name) {
+			close();
+			return;
+		}
+		if (!/^[a-zA-Z\s]+$/.test(name)) {
+			await message('이름은 영문자와 공백만 사용할 수 있어요.', {
+				kind: 'error',
+			});
+			close();
+			return;
+		}
+		try {
+			await apiClient.patch('/users/me', {
+				name,
+			});
+			localStorage.setItem('name', name);
+		} catch (error) {
+			await message('이름 변경에 실패했어요.');
+			log('error', 'Failed to change name', error);
+			if (prevName) {
+				localStorage.setItem('name', prevName);
+				setName(prevName);
+			}
+		} finally {
+			close();
+		}
+	}, [name, close]);
+	return (
+		<Drawer {...props}>
+			<DrawerTitle>이름 변경</DrawerTitle>
+			<Container vertical='small'>
+				<Input placeholder='새 이름' value={name} onValue={setName} />
+			</Container>
+			<ButtonGroup>
+				<Button fill onClick={onClickChange} disabled={!name}>
+					변경
+				</Button>
+			</ButtonGroup>
+		</Drawer>
 	);
 }
 ````
@@ -7355,663 +7994,46 @@ export function CalendarDayCell(props: CalendarDayCellProps) {
 }
 ````
 
-## File: src/components/ui/overlay/context.ts
+## File: src/components/ui/drawer/index.tsx
 ````typescript
-import { type Dispatch, type SetStateAction, createContext } from 'react';
-import type { OverlayContent } from './types';
-type OverlayContextType = {
-	contents: Array<OverlayContent>;
-	setContents: Dispatch<SetStateAction<Array<OverlayContent>>>;
-};
-export const OverlayContext = createContext({} as OverlayContextType);
-````
-
-## File: src/components/ui/overlay/renderer.tsx
-````typescript
-import { getTransition } from '@/lib/animation';
-import { type Variants, motion } from 'motion/react';
-import { type MouseEvent, useCallback } from 'react';
-import { backdrop } from './styles/backdrop.css';
-import type { OverlayContent } from './types';
-const backdropVariants: Variants = {
-	hidden: {
-		opacity: 0,
-		transition: getTransition(),
-	},
-	visible: {
-		opacity: 1,
-		transition: getTransition(),
-	},
-};
-interface OverlayRendererProps {
-	content: OverlayContent;
-	close: () => void;
-}
-export function OverlayRenderer(props: OverlayRendererProps) {
-	const { content, close } = props;
-	const { render: Render, options } = content;
-	const onClickBackdrop = useCallback(
-		(e: MouseEvent) => {
-			e.stopPropagation();
-			if (options?.onClickBackdrop) {
-				options.onClickBackdrop();
-			}
-			if (!options?.preventBackdropClose) {
+import { Container } from '@/components/layout/container';
+import { Row } from '@/components/layout/row';
+import type { BaseProps, HAS_CHILDREN } from '@/types/props';
+import { type PanInfo, motion } from 'motion/react';
+import { useCallback } from 'react';
+import type { OverlayProps } from '../overlay/types';
+import { drawerVariants } from './animation';
+import { drawer, handle } from './styles.css';
+export interface DrawerProps extends BaseProps<HAS_CHILDREN> {}
+export function Drawer(props: DrawerProps & OverlayProps) {
+	const { children: drawerContent, close } = props;
+	const onDragEnd = useCallback(
+		(_: unknown, info: PanInfo) => {
+			if (info.offset.y > 100) {
 				close();
 			}
 		},
-		[close, options],
+		[close],
 	);
 	return (
-		<>
-			<motion.div
-				className={backdrop}
-				variants={backdropVariants}
-				initial='hidden'
-				animate='visible'
-				exit='hidden'
-				onClick={onClickBackdrop}
-			/>
-			<Render key={content.id} close={close} />
-		</>
-	);
-}
-````
-
-## File: src/components/ui/overlay/types.ts
-````typescript
-import type { ComponentType } from 'react';
-export interface OverlayProps {
-	close: () => void;
-}
-export type Renderer<T = object> = (props: T & OverlayProps) => React.ReactNode;
-export type OverlayContent = {
-	id: string;
-	render: Renderer;
-	options?: OverlayOptions;
-};
-export type OverlayOptions = {
-	onClickBackdrop?: () => unknown;
-	preventBackdropClose?: boolean;
-};
-export type PropsOf<Component> = Component extends ComponentType<infer P>
-	? P extends OverlayProps
-		? P
-		: never
-	: never;
-````
-
-## File: src/components/ui/popup/styles.css.ts
-````typescript
-import { color } from '@/styles/color.css';
-import { uiStyle } from '@/styles/layer.css';
-export const popup = uiStyle({
-	position: 'fixed',
-	top: '50%',
-	left: '50%',
-	width: 'fit-content',
-	padding: 16,
-	backgroundColor: color.milk,
-	borderRadius: 24,
-	textAlign: 'center',
-	boxShadow: '0px 0px 24px 8px rgba(0, 0, 0, 0.10)',
-});
-export const fillPopup = uiStyle({
-	width: 'calc(100% - 32px)',
-});
-export const iconWrapper = uiStyle({
-	width: 56,
-	height: 56,
-	aspectRatio: '1 / 1',
-	padding: 16,
-	backgroundColor: color.cream,
-	borderRadius: '50%',
-});
-````
-
-## File: src/lib/managers/http.ts
-````typescript
-import { fetch } from '@tauri-apps/plugin-http';
-import { log } from '../log';
-interface APIResponse<T> {
-	status: number;
-	message: string;
-	data: T | null;
-	responseAt: string;
-}
-const DEFAULT_API_URL = 'http://localhost:3000' as const;
-class APIClient {
-	constructor(private baseUrl: string) {
-		if (baseUrl === DEFAULT_API_URL) {
-			log(
-				'warn',
-				'Using default API URL. Make sure to set the VITE_API_URL environment variable in production.',
-			);
-		}
-	}
-	private async request<T>(
-		path: string,
-		method: string,
-		body?: unknown,
-	): Promise<T> {
-		const url = new URL(path, this.baseUrl).toString();
-		const accessToken = localStorage.getItem('accessToken') || null;
-		try {
-			const response = await fetch(url, {
-				method,
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: accessToken ? `Bearer ${accessToken}` : '',
-				},
-				body: isBodyContainable(method) ? JSON.stringify(body) : undefined,
-			});
-			console.log(new Date().toISOString(), 'API Request', method, url, body);
-			const data: APIResponse<T> = await response.json();
-			console.log(new Date().toISOString(), 'API Response', method, url, data);
-			if (!response.ok || data.data === null) {
-				throw new Error(data.message);
-			}
-			return data.data;
-		} catch (error) {
-			console.error('API request failed:', error);
-			return Promise.reject(error);
-		}
-	}
-	async get<T>(path: string): Promise<T> {
-		return this.request<T>(path, 'GET');
-	}
-	async post<T>(path: string, data: unknown): Promise<T> {
-		return this.request<T>(path, 'POST', data);
-	}
-	async put<T>(path: string, data: unknown): Promise<T> {
-		return this.request<T>(path, 'PUT', data);
-	}
-	async patch<T>(path: string, data: unknown): Promise<T> {
-		return this.request<T>(path, 'PATCH', data);
-	}
-	async delete<T>(path: string): Promise<T> {
-		return this.request<T>(path, 'DELETE');
-	}
-}
-export const apiClient = new APIClient(
-	import.meta.env.TAURI_ENV_DEBUG
-		? DEFAULT_API_URL
-		: import.meta.env.VITE_API_URL || DEFAULT_API_URL,
-);
-function isBodyContainable(method: string): boolean {
-	return (
-		method === 'POST' ||
-		method === 'PUT' ||
-		method === 'PATCH' ||
-		method === 'DELETE'
-	);
-}
-````
-
-## File: src/styles/reset.css.ts
-````typescript
-import { color } from './color.css';
-import { resetGlobalStyle } from './layer.css';
-resetGlobalStyle('html, body, #root', {
-	width: '100%',
-	height: 'var(--vh, 100vh)',
-	backgroundColor: color.milk,
-	color: color.mud,
-	wordBreak: 'keep-all',
-	wordWrap: 'break-word',
-	textWrap: 'pretty',
-});
-resetGlobalStyle('*', {
-	boxSizing: 'border-box',
-	margin: 0,
-	padding: 0,
-	fontSynthesis: 'none',
-	WebkitFontSmoothing: 'antialiased',
-	textRendering: 'optimizeLegibility',
-	shapeRendering: 'geometricPrecision',
-	WebkitTapHighlightColor: 'rgba(0, 0, 0, 0)',
-	userSelect: 'none',
-	WebkitUserSelect: 'none',
-});
-resetGlobalStyle('*:focus', { outline: 'none' });
-resetGlobalStyle('a', {
-	width: '100%',
-	color: 'inherit',
-	cursor: 'pointer',
-	textDecoration: 'none',
-});
-resetGlobalStyle('svg', {
-	flexShrink: 0,
-});
-resetGlobalStyle('input, textarea, button', {
-	fontFamily: 'inherit',
-	color: 'inherit',
-	background: 'transparent',
-	border: 'none',
-	outline: 'none',
-});
-resetGlobalStyle('input::placeholder, textarea::placeholder', {
-	color: color.sand,
-});
-resetGlobalStyle('::-webkit-scrollbar', { display: 'none' });
-````
-
-## File: src-tauri/src/crypto.rs
-````rust
-use rsa::{pkcs1::{DecodeRsaPrivateKey, DecodeRsaPublicKey, EncodeRsaPrivateKey, EncodeRsaPublicKey}, pkcs1v15::DecryptingKey, rand_core::RngCore, traits::Decryptor, RsaPrivateKey, RsaPublicKey};
-use aes_gcm::{aead::{Aead, KeyInit, OsRng}, Aes256Gcm, Key, Nonce};
-use serde::{Serialize, Deserialize};
-use base64::prelude::*;
-#[derive(Serialize, Deserialize)]
-pub struct DiaryData {
-    pub emoji: String,
-    pub title: String,
-    pub content: String,
-    pub location: Option<String>,
-    pub weather: Option<String>,
-    pub attachments: Vec<String>,
-}
-#[derive(Serialize, Deserialize)]
-pub struct ReplyData {
-    pub emoji: String,
-    pub content: String,
-}
-#[tauri::command]
-pub fn generate_key_pair() -> Result<(String, String), String> {
-    let mut rng = OsRng;
-    let bits = 2048;
-    let private_key = RsaPrivateKey::new(&mut rng, bits)
-        .map_err(|e| format!("Key generation failed: {:?}", e))?;
-    let public_key = RsaPublicKey::from(&private_key);
-    let private_key_pem = private_key.to_pkcs1_pem(Default::default())
-        .map_err(|e| format!("Private key PEM encoding failed: {:?}", e))?
-        .to_string();
-    let public_key_pem = public_key.to_pkcs1_pem(Default::default())
-        .map_err(|e| format!("Public key PEM encoding failed: {:?}", e))?
-        .to_string();
-    Ok((private_key_pem, public_key_pem))
-}
-#[tauri::command]
-pub fn encrypt_json(json: String, prev_aes_key: Option<String>) -> Result<(String, String, String), String> {
-    let aes_key: [u8; 32] = if let Some(b64) = prev_aes_key {
-        BASE64_STANDARD
-            .decode(b64)
-            .map_err(|e| format!("Failed to decode provided AES key: {:?}", e))?
-            .try_into()
-            .map_err(|_| "Invalid AES key length".to_string())?
-    } else {
-        let mut key = [0u8; 32];
-        let mut rng = OsRng;
-        rng.fill_bytes(&mut key);
-        key
-    };
-    let nonce_bytes: [u8; 12] = rand::random();
-    let nonce = Nonce::from_slice(&nonce_bytes);
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&aes_key));
-    let encrypted_data = cipher
-        .encrypt(nonce, json.as_bytes())
-        .map_err(|e| format!("AES encryption failed: {:?}", e))?;
-    Ok((
-        BASE64_STANDARD.encode(&encrypted_data),
-        BASE64_STANDARD.encode(&aes_key),
-        BASE64_STANDARD.encode(&nonce_bytes),
-    ))
-}
-#[tauri::command]
-pub fn encrypt_key_for_recipient(
-    public_key_pem: String,
-    aes_key: String,
-) -> Result<String, String> {
-    let public_key = RsaPublicKey::from_pkcs1_pem(&public_key_pem)
-        .map_err(|e| format!("Invalid public key: {:?}", e))?;
-    let aes_key = BASE64_STANDARD
-        .decode(&aes_key)
-        .map_err(|e| format!("Failed to decode AES key: {:?}", e))?;
-    let mut rng = OsRng;
-    let encrypted_key = public_key
-        .encrypt(&mut rng, rsa::pkcs1v15::Pkcs1v15Encrypt, &aes_key)
-        .map_err(|e| format!("RSA encryption failed: {:?}", e))?;
-    Ok(BASE64_STANDARD.encode(&encrypted_key))
-}
-#[tauri::command]
-pub fn decrypt_json(
-    private_key_pem: String,
-    encrypted_data_b64: String,
-    encrypted_key_b64: String,
-    nonce_b64: String,
-) -> Result<String, String> {
-    let private_key = RsaPrivateKey::from_pkcs1_pem(&private_key_pem)
-        .map_err(|e| format!("Invalid private key: {:?}", e))?;
-    let encrypted_data = BASE64_STANDARD.decode(encrypted_data_b64)
-        .map_err(|e| format!("encrypted_data decode error: {:?}", e))?;
-    let encrypted_key = BASE64_STANDARD.decode(encrypted_key_b64)
-        .map_err(|e| format!("encrypted_key decode error: {:?}", e))?;
-    let nonce_bytes = BASE64_STANDARD.decode(nonce_b64)
-        .map_err(|e| format!("nonce decode error: {:?}", e))?;
-    let nonce = Nonce::from_slice(&nonce_bytes);
-    let decryptor = DecryptingKey::new(private_key);
-    let aes_key = decryptor.decrypt(&encrypted_key)
-        .map_err(|e| format!("RSA decryption failed: {:?}", e))?;
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&aes_key));
-    let decrypted_data = cipher.decrypt(nonce, encrypted_data.as_ref())
-        .map_err(|e| format!("AES decryption failed: {:?}", e))?;
-    let json_str = String::from_utf8(decrypted_data)
-        .map_err(|e| format!("UTF-8 decode error: {:?}", e))?;
-    Ok(json_str)
-}
-#[tauri::command]
-pub fn decrypt_diary(
-    private_key_pem: String,
-    encrypted_data_b64: String,
-    encrypted_key_b64: String,
-    nonce_b64: String,
-) -> Result<DiaryData, String> {
-    let decrypted_json = decrypt_json(private_key_pem, encrypted_data_b64, encrypted_key_b64, nonce_b64)?;
-    serde_json::from_str(&decrypted_json)
-        .map_err(|e| format!("Failed to deserialize DiaryData: {:?}", e))
-}
-#[tauri::command]
-pub fn decrypt_reply(
-    private_key_pem: String,
-    encrypted_data_b64: String,
-    encrypted_key_b64: String,
-    nonce_b64: String,
-) -> Result<ReplyData, String> {
-    let decrypted_json = decrypt_json(private_key_pem, encrypted_data_b64, encrypted_key_b64, nonce_b64)?;
-    serde_json::from_str(&decrypted_json)
-        .map_err(|e| format!("Failed to deserialize ReplyData: {:?}", e))
-}
-````
-
-## File: src/components/features/diary/location-drawer.tsx
-````typescript
-import { AppContext } from '@/App';
-import { Column } from '@/components/layout/column';
-import { Container } from '@/components/layout/container';
-import { Row } from '@/components/layout/row';
-import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button/group';
-import { PaddingDivider } from '@/components/ui/divider/padding';
-import { Drawer } from '@/components/ui/drawer';
-import { DrawerTitle } from '@/components/ui/drawer/title';
-import { Input } from '@/components/ui/input';
-import { CompactListItem } from '@/components/ui/list/compact/item';
-import { CompactListTitle } from '@/components/ui/list/compact/title';
-import type { OverlayProps } from '@/components/ui/overlay/types';
-import { Typo } from '@/components/ui/typography';
-import { type Location, locationManager } from '@/lib/managers/location';
-import { color } from '@/styles/color.css';
-import { MapPinned, X } from 'lucide-react';
-import { useCallback, useContext, useState } from 'react';
-import { aliasIcon, aliasItem, aliasList } from './styles/location-drawer.css';
-interface LocationDrawerProps {
-	setLocation: (location: string) => void;
-}
-export function DiaryLocationDrawer(props: LocationDrawerProps & OverlayProps) {
-	const { setLocation: setDiaryLocation, close } = props;
-	const { forceUpdate } = useContext(AppContext);
-	const [address, setAddress] = useState('');
-	const onClickClearHistory = useCallback(async () => {
-		await locationManager.clearHistory();
-		forceUpdate();
-	}, [forceUpdate]);
-	const handleClickItem = useCallback(
-		(location: Location) => {
-			setAddress(location.name || location.address);
-			setDiaryLocation(location.name || location.address);
-			close();
-			setTimeout(() => {
-				locationManager.addHistory(location);
-			}, 200);
-		},
-		[setDiaryLocation, close],
-	);
-	const handleClickRemoveHistory = useCallback(
-		(history: Location) => {
-			locationManager.removeHistory(history);
-			forceUpdate();
-		},
-		[forceUpdate],
-	);
-	const onClickAdd = useCallback(() => {
-		setDiaryLocation(address);
-		close();
-		setTimeout(() => {
-			locationManager.addHistory(address);
-		}, 200);
-	}, [setDiaryLocation, address, close]);
-	return (
-		<Drawer close={close}>
-			<DrawerTitle>Add location</DrawerTitle>
-			<Container vertical='small'>
-				<Input
-					placeholder='Enter your address'
-					value={address}
-					onValue={setAddress}
-				/>
-			</Container>
-			<Container vertical='small' horizontal='regular'>
-				<Row className={aliasList} gap={4} align='center' justify='start'>
-					{locationManager.getPresetKeys().map((presetKey) => {
-						const location = locationManager.getPresetLocation(presetKey);
-						if (!location) return null;
-						return (
-							<AliasItem
-								key={presetKey}
-								icon={locationManager.getPresetIcon(presetKey)}
-								name={locationManager.getPresetName(presetKey)}
-								onClick={() => handleClickItem(location)}
-							/>
-						);
-					})}
-					{locationManager.getAliases().map((alias) => (
-						<AliasItem
-							key={alias.uuid}
-							name={alias.name || alias.address}
-							onClick={() => handleClickItem(alias)}
-						/>
-					))}
+		<motion.div
+			className={drawer}
+			variants={drawerVariants}
+			initial='hidden'
+			animate='visible'
+			exit='hidden'
+			drag='y'
+			dragConstraints={{ top: 0, bottom: 0 }}
+			dragDirectionLock
+			onDragEnd={onDragEnd}
+		>
+			<Container vertical='regular'>
+				<Row justify='center'>
+					<div className={handle} />
 				</Row>
 			</Container>
-			<PaddingDivider />
-			<CompactListTitle
-				title='Recent locations'
-				trailingArea={
-					<Typo.Caption color={color.sand} onClick={onClickClearHistory}>
-						Clear
-					</Typo.Caption>
-				}
-			/>
-			{locationManager.getHistory().map((history) => (
-				<CompactListItem
-					key={history.uuid}
-					name={history.name || history.address}
-					description={history.name ? history.address : undefined}
-					onClick={() => handleClickItem(history)}
-					trailingArea={
-						<X size={20} onClick={() => handleClickRemoveHistory(history)} />
-					}
-				/>
-			))}
-			<ButtonGroup>
-				<Button fill onClick={onClickAdd}>
-					Add
-				</Button>
-			</ButtonGroup>
-		</Drawer>
-	);
-}
-interface AliasItemProps {
-	icon?: typeof MapPinned;
-	name: string;
-	onClick?: () => void;
-}
-function AliasItem(props: AliasItemProps) {
-	const { icon: Icon, name, onClick } = props;
-	return (
-		<Container
-			className={aliasItem}
-			vertical='none'
-			horizontal='small'
-			onClick={onClick}
-		>
-			<Column gap={4} align='center'>
-				<div className={aliasIcon}>
-					{Icon ? <Icon size={20} /> : <MapPinned size={20} />}
-				</div>
-				<Typo.Caption>{name}</Typo.Caption>
-			</Column>
-		</Container>
-	);
-}
-````
-
-## File: src/components/pages/diary/additional-info.tsx
-````typescript
-import { DiaryLocationDrawer } from '@/components/features/diary/location-drawer';
-import { DiaryWeatherDrawer } from '@/components/features/diary/weather-drawer';
-import { Row } from '@/components/layout/row';
-import { Typo } from '@/components/ui/typography';
-import { useOverlay } from '@/hooks/use-overlay';
-import { cn } from '@/lib/common';
-import { getWeatherIcon, getWeatherLabel } from '@/lib/weather';
-import { MapPin } from 'lucide-react';
-import { useCallback, useContext } from 'react';
-import { DiaryContext } from './context';
-import { item, itemActive } from './styles/additional-info.css';
-export function DiaryAdditionalInfo() {
-	const {
-		diary,
-		diaryDispatch: { setLocation, setWeather },
-	} = useContext(DiaryContext);
-	const WeatherIcon = getWeatherIcon(diary.weather);
-	const { show: openLocation } = useOverlay(DiaryLocationDrawer);
-	const { show: openWeather } = useOverlay(DiaryWeatherDrawer);
-	const onClickLocation = useCallback(() => {
-		if (!diary.readonly) {
-			openLocation({ setLocation });
-		}
-	}, [diary.readonly, setLocation, openLocation]);
-	const onClickWeather = useCallback(() => {
-		if (!diary.readonly) {
-			openWeather({ setWeather });
-		}
-	}, [diary.readonly, setWeather, openWeather]);
-	return (
-		<Row gap={8}>
-			<Row
-				className={cn(item, diary.location && itemActive)}
-				gap={6}
-				align='center'
-				onClick={onClickLocation}
-			>
-				<MapPin size={20} />
-				<Typo.Body weight='medium'>
-					{diary.location || 'Add location'}
-				</Typo.Body>
-			</Row>
-			<Row
-				className={cn(item, diary.weather && itemActive)}
-				gap={6}
-				align='center'
-				onClick={onClickWeather}
-			>
-				<WeatherIcon size={20} />
-				<Typo.Body weight='medium'>
-					{diary.weather ? getWeatherLabel(diary.weather) : 'Add weather'}
-				</Typo.Body>
-			</Row>
-		</Row>
-	);
-}
-````
-
-## File: src/components/pages/my-profile/reset-confirm.tsx
-````typescript
-import { Container } from '@/components/layout/container';
-import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button/group';
-import { Drawer } from '@/components/ui/drawer';
-import type { OverlayProps } from '@/components/ui/overlay/types';
-import { Typo } from '@/components/ui/typography';
-import { useAuth } from '@/hooks/use-auth';
-import { resetApp } from '@/lib/app';
-import { message } from '@tauri-apps/plugin-dialog';
-import { ShieldQuestion } from 'lucide-react';
-import { useCallback } from 'react';
-import { centered, iconWrapper } from './styles/reset-confirm.css';
-export function MyProfileResetConfirmDrawer(props: OverlayProps) {
-	const { close } = props;
-	const authenticate = useAuth();
-	const onClickReset = useCallback(async () => {
-		try {
-			authenticate(async () => {
-				await resetApp();
-				location.reload();
-			});
-		} catch (error) {
-			await message('Reset failed. Please try again later.');
-			console.error('Reset failed:', error);
-			close();
-		}
-	}, [authenticate, close]);
-	return (
-		<Drawer {...props}>
-			<Container horizontal='none'>
-				<Container className={centered} vertical='regular'>
-					<div className={iconWrapper}>
-						<ShieldQuestion />
-					</div>
-				</Container>
-				<Container className={centered} vertical='small'>
-					<Typo.Lead weight='strong'>Are you sure?</Typo.Lead>
-				</Container>
-				<Container className={centered} vertical='none'>
-					<Typo.Body>Your data will be deleted and log out</Typo.Body>
-				</Container>
-			</Container>
-			<ButtonGroup direction='horizontal'>
-				<Button fill onClick={onClickReset}>
-					Reset
-				</Button>
-				<Button fill variant='secondary' onClick={close}>
-					Cancel
-				</Button>
-			</ButtonGroup>
-		</Drawer>
-	);
-}
-````
-
-## File: src/components/pages/sign-up/biometric.tsx
-````typescript
-import { Column } from '@/components/layout/column';
-import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button/group';
-import { Content } from '@/components/ui/content';
-import { ScanFace } from 'lucide-react';
-import { fillHeight } from './styles/styles.css';
-interface SignUpBiometricSectionProps {
-	signUp: (biometricLogin: boolean) => void;
-}
-export function SignUpBiometricSection(props: SignUpBiometricSectionProps) {
-	const { signUp } = props;
-	return (
-		<Column className={fillHeight}>
-			<Content
-				icon={<ScanFace size={48} />}
-				title='Use Biometric Login?'
-				description='You can use FaceID or TouchID to use this app'
-			/>
-			<ButtonGroup bottomSafeAreaPadding>
-				<Button fill variant='secondary' onClick={() => signUp(false)}>
-					No
-				</Button>
-				<Button fill onClick={() => signUp(true)}>
-					Yes
-				</Button>
-			</ButtonGroup>
-		</Column>
+			{drawerContent}
+		</motion.div>
 	);
 }
 ````
@@ -8075,7 +8097,7 @@ function EmojiSelectorDrawer(props: EmojiSelectorDrawerProps & OverlayProps) {
 	return (
 		<Drawer close={close}>
 			<Container vertical='small' horizontal='large'>
-				<Typo.Lead weight='strong'>How about your feeling?</Typo.Lead>
+				<Typo.Lead weight='strong'>지금 기분이 어떤가요?</Typo.Lead>
 			</Container>
 			<Container className={emojiContainer} vertical='small'>
 				<div className={emojiGrid}>
@@ -8102,75 +8124,665 @@ function EmojiSelectorDrawer(props: EmojiSelectorDrawerProps & OverlayProps) {
 }
 ````
 
-## File: src/lib/managers/friend.ts
+## File: src/components/ui/popup/index.tsx
 ````typescript
-export interface User {
-	uuid: string;
-	name: string;
-	username: string;
-	profileUrl: string;
-	publicKey: string;
-	createdAt: string;
-	updatedAt: string;
+import { cn } from '@/lib/common';
+import type { BaseProps, HAS_CHILDREN } from '@/types/props';
+import { motion } from 'motion/react';
+import { variants } from './animation';
+import { fillPopup, popup } from './styles.css';
+interface PopupProps extends BaseProps<HAS_CHILDREN> {
+	fill?: boolean;
 }
-class FriendManager {
-	private friends: Map<string, User> = new Map();
-	constructor() {
-		if (typeof window !== 'undefined') {
-			const savedFriends = localStorage.getItem('saved-friends');
-			if (savedFriends) {
-				const parsedUsers = JSON.parse(savedFriends);
-				this.friends = new Map<string, User>(Object.entries(parsedUsers));
+export function Popup(props: PopupProps) {
+	const { fill = true, className, children } = props;
+	return (
+		<motion.div
+			className={cn(popup, className, { [fillPopup]: fill })}
+			variants={variants}
+			initial='hidden'
+			animate='visible'
+			exit='hidden'
+		>
+			{children}
+		</motion.div>
+	);
+}
+````
+
+## File: src/components/ui/popup/styles.css.ts
+````typescript
+import { color } from '@/styles/color.css';
+import { uiStyle } from '@/styles/layer.css';
+export const popup = uiStyle({
+	position: 'fixed',
+	top: '50%',
+	left: '50%',
+	width: 'fit-content',
+	padding: 16,
+	backgroundColor: color.milk,
+	borderRadius: 24,
+	textAlign: 'center',
+	boxShadow: '0px 0px 24px 8px rgba(0, 0, 0, 0.10)',
+});
+export const fillPopup = uiStyle({
+	width: 'calc(100% - 32px)',
+});
+export const iconWrapper = uiStyle({
+	width: 56,
+	height: 56,
+	aspectRatio: '1 / 1',
+	padding: 16,
+	backgroundColor: color.cream,
+	borderRadius: '50%',
+});
+````
+
+## File: src/hooks/use-overlay.ts
+````typescript
+import { OverlayContext } from '@/components/ui/overlay/context';
+import type { OverlayOptions, Renderer } from '@/components/ui/overlay/types';
+import { nanoid } from 'nanoid';
+import { useCallback, useContext, useEffect, useMemo } from 'react';
+export function useOverlay<T extends object>(
+	renderer: Renderer<T>,
+	options: OverlayOptions = {},
+) {
+	const id = useMemo(nanoid, []);
+	const { setContents } = useContext(OverlayContext);
+	const show = useCallback(
+		(props: T) => {
+			setContents((prev) => [
+				...prev,
+				{
+					id,
+					render: (prevProps) =>
+						renderer({
+							...prevProps,
+							...props,
+						}),
+					options,
+				},
+			]);
+		},
+		[id, renderer, options, setContents],
+	);
+	const hide = useCallback(() => {
+		setContents((prev) => prev.filter((content) => content.id !== id));
+	}, [id, setContents]);
+	useEffect(() => {
+		return () => {
+			hide();
+		};
+	}, [hide]);
+	return {
+		show,
+		hide,
+	};
+}
+````
+
+## File: src/lib/common.ts
+````typescript
+export { default as cn } from 'classnames';
+export async function resizeImage(image: File, size = 256) {
+	const reader = new FileReader();
+	const imageUrl = await new Promise<string>((resolve) => {
+		reader.onloadend = () => {
+			resolve(reader.result?.toString() ?? '');
+		};
+		reader.readAsDataURL(image);
+	});
+	const img = new Image();
+	const resizedImageUrl = await new Promise<string>((resolve) => {
+		img.onload = () => {
+			const canvas = document.createElement('canvas');
+			canvas.width = size;
+			canvas.height = size;
+			const ctx = canvas.getContext('2d');
+			if (ctx) {
+				ctx.drawImage(img, 0, 0, size, size);
+				resolve(canvas.toDataURL());
 			}
-		}
-	}
-	private save() {
-		if (typeof window !== 'undefined') {
-			localStorage.setItem(
-				'saved-friends',
-				JSON.stringify(Object.fromEntries(this.friends)),
-			);
-		}
-	}
-	isFriend(uuid: string) {
-		return this.friends.has(uuid);
-	}
-	cacheUser(user: User) {
-		this.friends.set(user.uuid, user);
-	}
-	getFriends() {
-		return Array.from(this.friends.values());
-	}
-	getFriend(uuid: string) {
-		return this.friends.get(uuid);
-	}
-	addFriend(user: User) {
-		if (this.friends.has(user.uuid)) {
-			return;
-		}
-		this.friends.set(user.uuid, user);
-		this.save();
-	}
-	updateFriend(uuid: string, user: User) {
-		if (!this.friends.has(uuid)) {
-			return;
-		}
-		this.friends.set(uuid, user);
-		this.save();
-	}
-	removeFriend(uuid: string) {
-		if (!this.friends.has(uuid)) {
-			return;
-		}
-		this.friends.delete(uuid);
-		this.save();
-	}
-	clear() {
-		this.friends.clear();
-		this.save();
-	}
+		};
+		img.src = imageUrl;
+	});
+	return resizedImageUrl;
 }
-export const friendManager = new FriendManager();
+export async function wait(ms: number) {
+	return new Promise((resolve) => {
+		setTimeout(resolve, ms);
+	});
+}
+export function calculateDiffDays(createdAt: Date) {
+	const now = new Date();
+	const diff = Math.abs(now.getTime() - createdAt.getTime());
+	const diffDays = Math.floor(diff / (1000 * 3600 * 24));
+	return diffDays;
+}
+export function convertFileToBase64(file: File): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => {
+			resolve(reader.result as string);
+		};
+		reader.onerror = (error) => {
+			reject(error);
+		};
+		reader.readAsDataURL(file);
+	});
+}
+export function bytesToSize(bytes: number): string {
+	if (bytes === 0) return '0 바이트';
+	const k = 1024;
+	const sizes = ['바이트', 'KB', 'MB', 'GB'];
+	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	return `${(bytes / k ** i).toFixed(2)} ${sizes[i]}`;
+}
+````
+
+## File: src/routes/my-profile/page.css.ts
+````typescript
+import { color } from '@/styles/color.css';
+import { style } from '@vanilla-extract/css';
+export const avatarContainer = style({
+	display: 'flex',
+	justifyContent: 'center',
+});
+export const stat = style({
+	width: '100%',
+	backgroundColor: color.cream,
+	borderRadius: 16,
+});
+````
+
+## File: src-tauri/capabilities/default.json
+````json
+{
+	"$schema": "../gen/schemas/desktop-schema.json",
+	"identifier": "default",
+	"description": "Capability for the main window",
+	"windows": ["main"],
+	"permissions": [
+		"core:default",
+		"opener:default",
+		"dialog:default",
+		"fs:default",
+		"keychain:default",
+		"stronghold:default",
+		"log:default",
+		"clipboard-manager:allow-write-text",
+		{
+			"identifier": "http:default",
+			"allow": [
+				{
+					"url": "http://localhost:3000"
+				},
+				{
+					"url": "https://sotto-api.tyeongk.im"
+				},
+				{
+					"url": "https://minio.tyeongk.im"
+				}
+			]
+		}
+	]
+}
+````
+
+## File: vite.config.ts
+````typescript
+import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
+import react from '@vitejs/plugin-react';
+import fg from 'fast-glob';
+import { defineConfig } from 'vite';
+const host = process.env.TAURI_DEV_HOST;
+export default defineConfig(async () => ({
+	plugins: [react(), vanillaExtractPlugin()],
+	clearScreen: false,
+	resolve: {
+		alias: {
+			'@': '/src',
+		},
+	},
+	server: {
+		port: 1420,
+		strictPort: true,
+		host: host || false,
+		hmr: host
+			? {
+					protocol: 'ws',
+					host,
+					port: 1421,
+				}
+			: undefined,
+		watch: {
+			ignored: ['**/src-tauri/**'],
+		},
+		warmup: {
+			clientFiles: await fg(['./src/**/*.css.ts', '!./src/**/layer.css.ts']),
+		},
+	},
+	envPrefix: ['VITE_', 'TAURI_ENV_'],
+	minify: !process.env.TAURI_ENV_DEBUG ? 'esbuild' : false,
+	sourcemap: !!process.env.TAURI_ENV_DEBUG,
+}));
+````
+
+## File: src/components/features/diary/location-drawer.tsx
+````typescript
+import { AppContext } from '@/App';
+import { Column } from '@/components/layout/column';
+import { Container } from '@/components/layout/container';
+import { Row } from '@/components/layout/row';
+import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button/group';
+import { PaddingDivider } from '@/components/ui/divider/padding';
+import { Drawer } from '@/components/ui/drawer';
+import { DrawerTitle } from '@/components/ui/drawer/title';
+import { Input } from '@/components/ui/input';
+import { CompactListItem } from '@/components/ui/list/compact/item';
+import { CompactListTitle } from '@/components/ui/list/compact/title';
+import type { OverlayProps } from '@/components/ui/overlay/types';
+import { Typo } from '@/components/ui/typography';
+import { type Location, locationManager } from '@/lib/managers/location';
+import { color } from '@/styles/color.css';
+import { MapPinned, X } from 'lucide-react';
+import { useCallback, useContext, useState } from 'react';
+import { aliasIcon, aliasItem, aliasList } from './styles/location-drawer.css';
+interface LocationDrawerProps {
+	setLocation: (location: string) => void;
+}
+export function DiaryLocationDrawer(props: LocationDrawerProps & OverlayProps) {
+	const { setLocation: setDiaryLocation, close } = props;
+	const { forceUpdate } = useContext(AppContext);
+	const [address, setAddress] = useState('');
+	const onClickClearHistory = useCallback(async () => {
+		await locationManager.clearHistory();
+		forceUpdate();
+	}, [forceUpdate]);
+	const handleClickItem = useCallback(
+		(location: Location) => {
+			setAddress(location.name || location.address);
+			setDiaryLocation(location.name || location.address);
+			close();
+			setTimeout(() => {
+				locationManager.addHistory(location);
+			}, 200);
+		},
+		[setDiaryLocation, close],
+	);
+	const handleClickRemoveHistory = useCallback(
+		(history: Location) => {
+			locationManager.removeHistory(history);
+			forceUpdate();
+		},
+		[forceUpdate],
+	);
+	const onClickAdd = useCallback(() => {
+		setDiaryLocation(address);
+		close();
+		setTimeout(() => {
+			locationManager.addHistory(address);
+		}, 200);
+	}, [setDiaryLocation, address, close]);
+	return (
+		<Drawer close={close}>
+			<DrawerTitle>위치 추가</DrawerTitle>
+			<Container vertical='small'>
+				<Input
+					placeholder='주소를 입력하세요'
+					value={address}
+					onValue={setAddress}
+				/>
+			</Container>
+			<Container vertical='small' horizontal='regular'>
+				<Row className={aliasList} gap={4} align='center' justify='start'>
+					{locationManager.getPresetKeys().map((presetKey) => {
+						const location = locationManager.getPresetLocation(presetKey);
+						if (!location) return null;
+						return (
+							<AliasItem
+								key={presetKey}
+								icon={locationManager.getPresetIcon(presetKey)}
+								name={locationManager.getPresetName(presetKey)}
+								onClick={() => handleClickItem(location)}
+							/>
+						);
+					})}
+					{locationManager.getAliases().map((alias) => (
+						<AliasItem
+							key={alias.uuid}
+							name={alias.name || alias.address}
+							onClick={() => handleClickItem(alias)}
+						/>
+					))}
+				</Row>
+			</Container>
+			<PaddingDivider />
+			<CompactListTitle
+				title='최근 위치'
+				trailingArea={
+					<Typo.Caption color={color.sand} onClick={onClickClearHistory}>
+						지우기
+					</Typo.Caption>
+				}
+			/>
+			{locationManager.getHistory().map((history) => (
+				<CompactListItem
+					key={history.uuid}
+					name={history.name || history.address}
+					description={history.name ? history.address : undefined}
+					onClick={() => handleClickItem(history)}
+					trailingArea={
+						<X size={20} onClick={() => handleClickRemoveHistory(history)} />
+					}
+				/>
+			))}
+			<ButtonGroup>
+				<Button fill onClick={onClickAdd}>
+					추가
+				</Button>
+			</ButtonGroup>
+		</Drawer>
+	);
+}
+interface AliasItemProps {
+	icon?: typeof MapPinned;
+	name: string;
+	onClick?: () => void;
+}
+function AliasItem(props: AliasItemProps) {
+	const { icon: Icon, name, onClick } = props;
+	return (
+		<Container
+			className={aliasItem}
+			vertical='none'
+			horizontal='small'
+			onClick={onClick}
+		>
+			<Column gap={4} align='center'>
+				<div className={aliasIcon}>
+					{Icon ? <Icon size={20} /> : <MapPinned size={20} />}
+				</div>
+				<Typo.Caption>{name}</Typo.Caption>
+			</Column>
+		</Container>
+	);
+}
+````
+
+## File: src/components/features/reply/delete-popup.tsx
+````typescript
+import { AppContext } from '@/App';
+import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button/group';
+import type { OverlayProps } from '@/components/ui/overlay/types';
+import { Popup } from '@/components/ui/popup';
+import { PopupContent } from '@/components/ui/popup/content';
+import { log } from '@/lib/log';
+import { friendManager } from '@/lib/managers/friend';
+import { apiClient } from '@/lib/managers/http';
+import { message } from '@tauri-apps/plugin-dialog';
+import { TriangleAlert } from 'lucide-react';
+import { useCallback, useContext } from 'react';
+interface ReplyDeletePopupProps {
+	reply: Reply;
+	onDelete: () => unknown;
+}
+export function ReplyDeletePopup(props: ReplyDeletePopupProps & OverlayProps) {
+	const { reply, onDelete, close } = props;
+	const { forceUpdate } = useContext(AppContext);
+	const onClickDelete = useCallback(async () => {
+		try {
+			await apiClient.delete(`/replies/${reply.uuid}`);
+			onDelete();
+			forceUpdate();
+		} catch (error) {
+			log('error', 'Failed to delete reply', error);
+			await message(`답글 삭제에 실패했어요: ${error}`);
+			return;
+		} finally {
+			close();
+		}
+	}, [reply.uuid, onDelete, close, forceUpdate]);
+	const author = friendManager.getFriend(reply.authorId);
+	if (!author) {
+		return null;
+	}
+	return (
+		<Popup>
+			<PopupContent
+				icon={<TriangleAlert />}
+				title={`${author.name}님의 답글을 삭제할까요?`}
+				description='이 작업은 되돌릴 수 없어요.'
+			/>
+			<ButtonGroup smallPadding>
+				<Button fill onClick={onClickDelete}>
+					삭제
+				</Button>
+				<Button fill variant='secondary' onClick={close}>
+					취소
+				</Button>
+			</ButtonGroup>
+		</Popup>
+	);
+}
+````
+
+## File: src/components/features/reply/list-drawer.tsx
+````typescript
+import { decryptReply } from '@/binding/function/decrypt-reply';
+import { Column } from '@/components/layout/column';
+import { Container } from '@/components/layout/container';
+import { Row } from '@/components/layout/row';
+import { Avatar } from '@/components/ui/avatar';
+import { Content } from '@/components/ui/content';
+import { Drawer } from '@/components/ui/drawer';
+import { DrawerTitle } from '@/components/ui/drawer/title';
+import { LoadingCircle } from '@/components/ui/loading-circle';
+import type { OverlayProps } from '@/components/ui/overlay/types';
+import { Typo } from '@/components/ui/typography';
+import { useOverlay } from '@/hooks/use-overlay';
+import { log } from '@/lib/log';
+import { friendManager } from '@/lib/managers/friend';
+import { apiClient } from '@/lib/managers/http';
+import { storageClient } from '@/lib/managers/storage';
+import { message } from '@tauri-apps/plugin-dialog';
+import { MessageCircleDashed, X } from 'lucide-react';
+import { type MouseEvent, useCallback, useEffect, useState } from 'react';
+import { ReplyDeletePopup } from './delete-popup';
+import { content, list } from './styles/replies-drawer.css';
+interface ReplyListDrawerProps {
+	diary: Diary;
+}
+export function ReplyListDrawer(props: ReplyListDrawerProps & OverlayProps) {
+	const { diary, close } = props;
+	const [replies, setReplies] = useState<Array<Reply>>([]);
+	const [isLoading, setIsLoading] = useState(true);
+	const [isInitialized, setIsInitialized] = useState(false);
+	const fetchReplies = useCallback(async () => {
+		setIsLoading(true);
+		try {
+			const replies = await apiClient.get<RepliesResponse>(
+				`/replies?diaryId=${diary.shareUUID}`,
+			);
+			const privateKey = await storageClient.get('privateKey');
+			if (!privateKey) {
+				log('error', 'Private key not found');
+				throw new Error('Private key not found');
+			}
+			const decryptedReplies = await Promise.all(
+				replies.map(async (reply) => ({
+					uuid: reply.uuid,
+					diaryId: reply.diaryId,
+					authorId: reply.authorId,
+					...(await decryptReply(
+						privateKey,
+						reply.data,
+						reply.encryptedKey,
+						reply.nonce,
+					)),
+					createdAt: new Date(reply.createdAt),
+				})),
+			);
+			setReplies(decryptedReplies);
+		} catch (error) {
+			log('error', 'Failed to fetch replies', error);
+			await message(`답글을 불러오지 못했어요: ${error}`);
+			close();
+		} finally {
+			setIsLoading(false);
+		}
+	}, [diary.shareUUID, close]);
+	useEffect(() => {
+		if (!isInitialized) {
+			fetchReplies();
+			setIsInitialized(true);
+		}
+	}, [isInitialized, fetchReplies]);
+	return (
+		<Drawer close={close}>
+			<DrawerTitle>답글</DrawerTitle>
+			{isLoading ? (
+				<Container vertical='large'>
+					<Row justify='center'>
+						<LoadingCircle />
+					</Row>
+				</Container>
+			) : replies.length > 0 ? (
+				<Column className={list}>
+					{replies.map((reply, i) => (
+						<Item key={i.toString()} reply={reply} onDelete={fetchReplies} />
+					))}
+				</Column>
+			) : (
+				<Content
+					icon={<MessageCircleDashed size={36} />}
+					description='아직 답글이 없어요'
+				/>
+			)}
+		</Drawer>
+	);
+}
+interface ItemProps {
+	reply: Reply;
+	onDelete: () => unknown;
+}
+function Item(props: ItemProps) {
+	const { reply, onDelete } = props;
+	const { show: openDelete } = useOverlay(ReplyDeletePopup);
+	const onClickDelete = useCallback(
+		(e: MouseEvent) => {
+			e.stopPropagation();
+			openDelete({ reply, onDelete });
+		},
+		[reply, onDelete, openDelete],
+	);
+	const author = friendManager.getFriend(reply.authorId);
+	if (!author) {
+		return null;
+	}
+	return (
+		<Container>
+			<Column gap={12}>
+				<Row align='center' justify='space-between'>
+					<Row gap={6} align='center'>
+						<Avatar size={24} src={author.profileUrl} />
+						<Typo.Caption weight='medium'>{author.name}</Typo.Caption>
+					</Row>
+					<X size={20} onClick={onClickDelete} />
+				</Row>
+				<Container className={content} vertical='regular'>
+					<Column gap={8}>
+						{reply.emoji && <Typo.Lead>{reply.emoji}</Typo.Lead>}
+						<Typo.Body>{reply.content}</Typo.Body>
+					</Column>
+				</Container>
+			</Column>
+		</Container>
+	);
+}
+````
+
+## File: src/components/pages/home/my-diaries/drawer.tsx
+````typescript
+import { DeleteDiaryPopup } from '@/components/features/diary/delete-popup';
+import { DiaryDetailDrawer } from '@/components/features/diary/detail-drawer';
+import { Container } from '@/components/layout/container';
+import { AvatarItem } from '@/components/ui/avatar/item';
+import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button/group';
+import type { OverlayProps } from '@/components/ui/overlay/types';
+import { Typo } from '@/components/ui/typography';
+import { useOverlay } from '@/hooks/use-overlay';
+import { log } from '@/lib/log';
+import { diaryManager } from '@/lib/managers/diary';
+import { friendManager } from '@/lib/managers/friend';
+import { message } from '@tauri-apps/plugin-dialog';
+import { useCallback } from 'react';
+import { list } from './styles/my-diary-drawer.css';
+interface HomeMyDiaryDrawerProps {
+	diary: Diary;
+	onDelete?: () => void;
+}
+export function HomeMyDiaryDrawer(
+	props: HomeMyDiaryDrawerProps & OverlayProps,
+) {
+	const { diary, onDelete, close } = props;
+	const { show: openDelete } = useOverlay(DeleteDiaryPopup);
+	const onClickCancelSharing = useCallback(async () => {
+		try {
+			await diaryManager.cancelShare(diary.uuid);
+		} catch (error) {
+			log('error', 'Fail to cancel sharing diary', error);
+			await message('일기 공유 중지에 실패했습니다.');
+		} finally {
+			close();
+		}
+	}, [diary, close]);
+	const onClickDelete = useCallback(() => {
+		openDelete({
+			diary,
+			callback: () => {
+				if (onDelete) {
+					onDelete();
+				}
+				close();
+			},
+		});
+	}, [diary, openDelete, onDelete, close]);
+	return (
+		<DiaryDetailDrawer diary={diary} close={close}>
+			{diary.sharedWith.length > 0 && (
+				<Container vertical='small' horizontal='none'>
+					<Container vertical='small'>
+						<Typo.Body weight='medium'>
+							{diary.sharedWith.length.toLocaleString()}명의 친구와 공유됨
+						</Typo.Body>
+					</Container>
+					<div className={list}>
+						{diary.sharedWith.map((uuid) => {
+							const friend = friendManager.getFriend(uuid);
+							if (!friend) return null;
+							return <AvatarItem key={friend.uuid} user={friend} selected />;
+						})}
+					</div>
+				</Container>
+			)}
+			<ButtonGroup>
+				{diary.sharedWith.length > 0 && (
+					<Button fill variant='secondary' onClick={onClickCancelSharing}>
+						공유 중지
+					</Button>
+				)}
+				<Button fill onClick={onClickDelete}>
+					일기 삭제
+				</Button>
+			</ButtonGroup>
+		</DiaryDetailDrawer>
+	);
+}
 ````
 
 ## File: src/routes/explorer/friends/index.tsx
@@ -8196,14 +8808,14 @@ export default function ExplorerFriendsPage() {
 	return (
 		<>
 			<TopNavigator
-				leadingArea={<GoBack label='Profile' />}
+				leadingArea={<GoBack label='프로필' />}
 				trailingArea={<Plus onClick={openAddFriend} />}
 			/>
 			<ExplorerHeader
-				title='Friends'
+				title='친구'
 				count={friends.length}
 				search
-				placeholder='Search by name or username'
+				placeholder='이름 또는 사용자 이름으로 검색'
 			/>
 			<Container>
 				<Column gap={8}>
@@ -8277,152 +8889,206 @@ type RepliesResponse = Array<{
 	encryptedKey: string;
 	createdAt: string;
 }>;
+type PresignedUrlResponse = {
+	url: string;
+	fileName: string;
+};
+type AttachmentResponse = {
+	data: string;
+	nonce: string;
+};
 ````
 
-## File: src/main.tsx
+## File: src/components/pages/diary/additional-info.tsx
 ````typescript
-import { NuqsAdapter } from 'nuqs/adapters/react';
-import { Suspense } from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
-const root = document.getElementById('root');
-if (!root) {
-	throw new Error('Root element not found');
+import { DiaryLocationDrawer } from '@/components/features/diary/location-drawer';
+import { DiaryWeatherDrawer } from '@/components/features/diary/weather-drawer';
+import { Row } from '@/components/layout/row';
+import { Typo } from '@/components/ui/typography';
+import { useOverlay } from '@/hooks/use-overlay';
+import { getWeatherIcon, getWeatherLabel } from '@/lib/weather';
+import { MapPin } from 'lucide-react';
+import { useCallback, useContext } from 'react';
+import { DiaryContext } from './context';
+import { item } from './styles/additional-info.css';
+export function DiaryAdditionalInfo() {
+	const {
+		diary,
+		diaryDispatch: { setLocation, setWeather },
+	} = useContext(DiaryContext);
+	const WeatherIcon = getWeatherIcon(diary.weather);
+	const { show: openLocation } = useOverlay(DiaryLocationDrawer);
+	const { show: openWeather } = useOverlay(DiaryWeatherDrawer);
+	const onClickLocation = useCallback(() => {
+		if (!diary.readonly) {
+			openLocation({ setLocation });
+		}
+	}, [diary.readonly, setLocation, openLocation]);
+	const onClickWeather = useCallback(() => {
+		if (!diary.readonly) {
+			openWeather({ setWeather });
+		}
+	}, [diary.readonly, setWeather, openWeather]);
+	return (
+		<Row gap={8}>
+			<Row className={item} gap={6} align='center' onClick={onClickLocation}>
+				<MapPin size={20} />
+				<Typo.Body weight='medium'>{diary.location || '위치 추가'}</Typo.Body>
+			</Row>
+			<Row className={item} gap={6} align='center' onClick={onClickWeather}>
+				<WeatherIcon size={20} />
+				<Typo.Body weight='medium'>
+					{diary.weather ? getWeatherLabel(diary.weather) : '날씨 추가'}
+				</Typo.Body>
+			</Row>
+		</Row>
+	);
 }
-ReactDOM.createRoot(root).render(
-	<Suspense>
-		<NuqsAdapter>
-			<App />
-		</NuqsAdapter>
-	</Suspense>,
-);
 ````
 
-## File: index.html
-````html
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Sotto</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <div id="overlay-root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
-````
-
-## File: src/components/ui/overlay/provider.tsx
+## File: src/hooks/use-diary.ts
 ````typescript
-import './styles/root.css';
-import type { BaseProps, HAS_CHILDREN } from '@/types/props';
-import { AnimatePresence } from 'motion/react';
+import { diaryManager } from '@/lib/managers/diary';
+import { storageClient } from '@/lib/managers/storage';
+import type { Weather } from '@/lib/weather';
 import { useCallback, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { OverlayContext } from './context';
-import { OverlayRenderer } from './renderer';
-import type { OverlayContent } from './types';
-interface OverlayProviderProps extends BaseProps<HAS_CHILDREN> {}
-export function OverlayProvider(props: OverlayProviderProps) {
-	const { children: providerChildren } = props;
-	const [contents, setContents] = useState<Array<OverlayContent>>([]);
-	const hideContent = useCallback((id: string) => {
-		setContents((prev) => prev.filter((content) => content.id !== id));
+export function useDiary(uuid: string | null) {
+	const [diary, setDiary] = useState(() => getDiaryOrCreate(uuid));
+	const setEmoji = useCallback((emoji: string) => {
+		setDiary((prev) => ({
+			...prev,
+			emoji,
+		}));
 	}, []);
-	const overlayRoot = document.getElementById('overlay-root');
-	if (!overlayRoot) {
-		throw new Error('Overlay root element not found.');
-	}
-	return (
-		<OverlayContext value={{ contents, setContents }}>
-			{providerChildren}
-			{createPortal(
-				<AnimatePresence>
-					{contents.map((c) => (
-						<OverlayRenderer
-							key={c.id}
-							content={c}
-							close={() => hideContent(c.id)}
-						/>
-					))}
-				</AnimatePresence>,
-				overlayRoot,
-			)}
-		</OverlayContext>
-	);
-}
-````
-
-## File: src/components/ui/popup/index.tsx
-````typescript
-import { cn } from '@/lib/common';
-import type { BaseProps, HAS_CHILDREN } from '@/types/props';
-import { motion } from 'motion/react';
-import { variants } from './animation';
-import { fillPopup, popup } from './styles.css';
-interface PopupProps extends BaseProps<HAS_CHILDREN> {
-	fill?: boolean;
-}
-export function Popup(props: PopupProps) {
-	const { fill = true, className, children } = props;
-	return (
-		<motion.div
-			className={cn(popup, className, { [fillPopup]: fill })}
-			variants={variants}
-			initial='hidden'
-			animate='visible'
-			exit='hidden'
-		>
-			{children}
-		</motion.div>
-	);
-}
-````
-
-## File: src/hooks/use-overlay.ts
-````typescript
-import { OverlayContext } from '@/components/ui/overlay/context';
-import type { OverlayOptions, Renderer } from '@/components/ui/overlay/types';
-import { nanoid } from 'nanoid';
-import { useCallback, useContext, useEffect, useMemo } from 'react';
-export function useOverlay<T extends object>(
-	renderer: Renderer<T>,
-	options: OverlayOptions = {},
-) {
-	const id = useMemo(nanoid, []);
-	const { setContents } = useContext(OverlayContext);
-	const show = useCallback(
-		(props: T) => {
-			setContents((prev) => [
-				...prev,
-				{
-					id,
-					render: (prevProps) =>
-						renderer({
-							...prevProps,
-							...props,
-						}),
-					options,
-				},
-			]);
+	const setTitle = useCallback((title: string) => {
+		setDiary((prev) => ({
+			...prev,
+			title,
+		}));
+	}, []);
+	const setContent = useCallback((content: string) => {
+		setDiary((prev) => ({
+			...prev,
+			content,
+		}));
+	}, []);
+	const setLocation = useCallback((location: string) => {
+		setDiary((prev) => ({
+			...prev,
+			location,
+		}));
+	}, []);
+	const setWeather = useCallback((weather: Weather) => {
+		setDiary((prev) => ({
+			...prev,
+			weather,
+		}));
+	}, []);
+	const setAttachments = useCallback((attachments: Array<Attachment>) => {
+		setDiary((prev) => ({
+			...prev,
+			attachments,
+		}));
+	}, []);
+	return [
+		diary,
+		{
+			setEmoji,
+			setTitle,
+			setContent,
+			setLocation,
+			setWeather,
+			setAttachments,
+			setDiary,
 		},
-		[id, renderer, options, setContents],
+	] as const;
+}
+function getDiaryOrCreate(uuid?: string | null) {
+	if (!storageClient.isInitialized) {
+		return diaryManager.createDiary();
+	}
+	if (uuid) {
+		const data = diaryManager.getDiary(uuid);
+		if (!data) {
+			throw new Error('Diary not found');
+		}
+		return data;
+	}
+	return diaryManager.createDiary();
+}
+````
+
+## File: src/lib/managers/attachment.ts
+````typescript
+import { decryptData } from '@/binding/function/decrypt-data';
+import { encryptData } from '@/binding/function/encrypt-data';
+import { convertFileToBase64 } from '../common';
+import { log } from '../log';
+import { fileStorage } from './file';
+import { apiClient } from './http';
+import { storageClient } from './storage';
+export async function uploadAttachments(
+	attachments: Array<Attachment>,
+	aesKey: string,
+) {
+	const updatedAttachments = await Promise.all(
+		attachments.map(async (attachment) => {
+			if (!attachment.local_id) {
+				throw new Error('Attachment localId is missing');
+			}
+			const file = await fileStorage.getFile(attachment.local_id);
+			if (!file) {
+				throw new Error(`Attachment ${attachment.local_id} not found`);
+			}
+			try {
+				const { fileUrl } = await uploadAttachment(file, aesKey);
+				attachment.remote_url = fileUrl;
+				return attachment;
+			} catch (error) {
+				log('error', 'Failed to upload attachment:', error);
+				throw new Error(`Failed to upload attachment: ${attachment.local_id}`);
+			}
+		}),
 	);
-	const hide = useCallback(() => {
-		setContents((prev) => prev.filter((content) => content.id !== id));
-	}, [id, setContents]);
-	useEffect(() => {
-		return () => {
-			hide();
-		};
-	}, [hide]);
-	return {
-		show,
-		hide,
+	return updatedAttachments;
+}
+export async function uploadAttachment(file: File, aesKey: string) {
+	const base64File = await convertFileToBase64(file);
+	const [encryptedData, , nonce] = await encryptData(base64File, aesKey);
+	const filePayload = {
+		data: encryptedData,
+		nonce,
 	};
+	const { url: presignedUrl, fileName } =
+		await apiClient.get<PresignedUrlResponse>('/attachments/presigned-url');
+	await window.fetch(presignedUrl, {
+		method: 'PUT',
+		body: JSON.stringify(filePayload),
+		headers: {
+			'Content-Type': 'application/json',
+		},
+	});
+	const fileUrl = await apiClient.get<string>(
+		`/attachments/object-url?fileName=${fileName}`,
+	);
+	return {
+		fileName,
+		fileUrl,
+	};
+}
+export async function decryptAttachment(fileUrl: string, aesKey: string) {
+	const res = await window.fetch(fileUrl);
+	if (!res.ok) {
+		throw new Error('Failed to fetch attachment');
+	}
+	const privateKey = await storageClient.get('privateKey');
+	if (!privateKey) {
+		throw new Error('Private key not found');
+	}
+	const attachment: AttachmentResponse = await res.json();
+	const { data: encryptData, nonce } = attachment;
+	const data = await decryptData(privateKey, encryptData, aesKey, nonce);
+	return data;
 }
 ````
 
@@ -8432,25 +9098,30 @@ import { message } from '@tauri-apps/plugin-dialog';
 import { wait } from './common';
 import { log } from './log';
 import { diaryManager } from './managers/diary';
-import { friendManager } from './managers/friend';
-import { apiClient } from './managers/http';
+import { fileStorage } from './managers/file';
+// import { friendManager } from './managers/friend';
+// import { apiClient } from './managers/http';
 import { locationManager } from './managers/location';
 import { storageClient } from './managers/storage';
 export async function processSignIn(pin: string) {
 	await storageClient.init(pin);
 	await diaryManager.init();
 	await locationManager.init();
+	await fileStorage.init();
 	await wait(500);
 }
 export async function resetApp() {
 	try {
-		friendManager.clear();
-		await diaryManager.clear();
-		await apiClient.delete('/users/me');
-		await storageClient.clear();
+		await message('전시 망치지 말고 가서 다른 작품이나 보러가십쇼.');
+		throw new Error('Reset app is disabled in current build');
+		// friendManager.clear();
+		// await diaryManager.clear();
+		// await fileStorage.clear();
+		// await apiClient.delete('/users/me');
+		// await storageClient.clear();
 	} catch (error) {
 		await message(
-			'Failed to delete all diaries and log out. Please try again.',
+			'모든 일기 삭제 및 로그아웃에 실패했습니다. 다시 시도하지 마세요.',
 		);
 		log('error', 'Failed to delete all diaries and log out', error);
 		throw error;
@@ -8477,12 +9148,12 @@ export default function ExplorerDiariesPage() {
 	const diaries = diaryManager.getAllDiaries();
 	return (
 		<>
-			<TopNavigator leadingArea={<GoBack label='Profile' />} />
+			<TopNavigator leadingArea={<GoBack label='프로필' />} />
 			<ExplorerHeader
-				title='Diaries'
+				title='일기'
 				count={diaries.length}
 				search
-				placeholder='Search by title or content'
+				placeholder='제목 또는 내용으로 검색'
 			/>
 			<Container>
 				<Column gap={8}>
@@ -8492,14 +9163,16 @@ export default function ExplorerDiariesPage() {
 							leadingArea={
 								<Row align='center' gap={8}>
 									<Typo.Lead>{d.emoji}</Typo.Lead>
-									<Typo.Body weight='strong'>{d.title || 'Untitled'}</Typo.Body>
+									<Typo.Body weight='strong'>
+										{d.title || '제목 없음'}
+									</Typo.Body>
 								</Row>
 							}
 							trailingArea={
 								<Row gap={8} align='center'>
 									{d.sharedBy && (
 										<Typo.Caption>
-											by {friendManager.getFriend(d.sharedBy)?.name}
+											작성자 {friendManager.getFriend(d.sharedBy)?.name}
 										</Typo.Caption>
 									)}
 									<ChevronRight size={20} />
@@ -8515,61 +9188,42 @@ export default function ExplorerDiariesPage() {
 }
 ````
 
-## File: src/routes/home/index.tsx
-````typescript
-import { Column } from '@/components/layout/column';
-import { Row } from '@/components/layout/row';
-import { HomeBottomNavigator } from '@/components/pages/home/bottom-navigator';
-import { HomeFriendsDiariesSection } from '@/components/pages/home/friends-diaries';
-import { HomeMyDiariesSection } from '@/components/pages/home/my-diaries';
-import { Avatar } from '@/components/ui/avatar';
-import { SottoSymbol } from '@/components/ui/sotto-symbol';
-import { Tabs } from '@/components/ui/tabs';
-import { TabsContent } from '@/components/ui/tabs/content';
-import { TabsGroup, TabsItem } from '@/components/ui/tabs/item';
-import { TopNavigator } from '@/components/ui/top-navigator';
-import { Typo } from '@/components/ui/typography';
-import { fullHeight } from '@/styles/utils.css';
-import { useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { left, right } from './page.css';
-export default function HomePage() {
-	const navigator = useNavigate();
-	const onClickAvatar = useCallback(() => {
-		navigator('/my-profile');
-	}, [navigator]);
-	return (
-		<Column className={fullHeight} justify='start'>
-			<TopNavigator
-				leadingArea={
-					<Row className={left} align='center' gap={6}>
-						<SottoSymbol />
-						<Typo.Lead weight='strong'>Sotto</Typo.Lead>
-					</Row>
-				}
-				trailingArea={
-					<Avatar
-						className={right}
-						src={localStorage.getItem('profileImage')}
-						onClick={onClickAvatar}
-					/>
-				}
-			/>
-			<Tabs defaultValue='my'>
-				<TabsGroup>
-					<TabsItem value='my'>My</TabsItem>
-					<TabsItem value='friends'>Friends</TabsItem>
-				</TabsGroup>
-				<TabsContent value='my'>
-					<HomeMyDiariesSection />
-				</TabsContent>
-				<TabsContent value='friends'>
-					<HomeFriendsDiariesSection />
-				</TabsContent>
-			</Tabs>
-			<HomeBottomNavigator />
-		</Column>
-	);
+## File: src-tauri/src/lib.rs
+````rust
+use tauri::Manager;
+mod crypto;
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_log::Builder::new().build())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_keychain::init())
+        .plugin(tauri_plugin_opener::init())
+        .invoke_handler(tauri::generate_handler![
+            crypto::generate_key_pair,
+            crypto::generate_aes_key,
+            crypto::encrypt_data,
+            crypto::encrypt_key_for_recipient,
+            crypto::decrypt_data,
+            crypto::decrypt_diary,
+            crypto::decrypt_reply,
+        ])
+        .setup(|app| {
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            let _ = app.handle().plugin(tauri_plugin_biometric::init());
+            let salt_path = app
+                .path()
+                .app_local_data_dir()
+                .expect("Failed to get app local data dir")
+                .join("sotto_salt.txt");
+            app.handle().plugin(tauri_plugin_stronghold::Builder::with_argon2(&salt_path).build())?;
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }
 ````
 
@@ -8605,7 +9259,7 @@ interface UserPickerDrawerProps extends DrawerProps {
 export function UserPickerDrawer(props: UserPickerDrawerProps & OverlayProps) {
 	const {
 		title,
-		placeholder = 'Search username',
+		placeholder = '유저네임 검색',
 		buttons,
 		defaultSelected = [],
 		close,
@@ -8672,8 +9326,8 @@ export function UserPickerDrawer(props: UserPickerDrawerProps & OverlayProps) {
 					</Container>
 					<Typo.Body>
 						{searchedUsers.length <= 0 && isSearching
-							? 'No users found'
-							: 'Search users'}
+							? '검색결과 없음'
+							: '사용자 검색결과가 여기에 표시됩니다'}
 					</Typo.Body>
 				</Column>
 			)}
@@ -8704,7 +9358,6 @@ import { HomeFriendDiaryDrawer } from '@/components/pages/home/friend-diary-draw
 import { HomeMyDiaryDrawer } from '@/components/pages/home/my-diaries/drawer';
 import { useOverlay } from '@/hooks/use-overlay';
 import { calculateDiffDays } from '@/lib/common';
-import type { Diary } from '@/lib/managers/diary';
 import { useCallback, useContext, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Typo } from '../typography';
@@ -8726,29 +9379,26 @@ export function DiaryCard(props: DiaryCardProps) {
 	const onClick = useCallback(() => {
 		navigate(`/diary?uuid=${diary.uuid}&readonly=${diary.readonly ?? false}`);
 	}, [diary, navigate]);
+	const onLongPress = useCallback(() => {
+		show({ diary, onDelete: forceUpdate });
+	}, [diary, show, forceUpdate]);
 	return (
-		<Container
-			className={card}
-			onClick={onClick}
-			onLongPress={() => {
-				show({ diary, onDelete: forceUpdate });
-			}}
-		>
+		<Container className={card} onClick={onClick} onLongPress={onLongPress}>
 			<Column className={content} align='end' justify='space-between'>
 				<Typo.Caption>
 					{diffDays === 0
-						? 'Today'
+						? '오늘'
 						: diffDays === 1
-							? 'Yesterday'
-							: `${diffDays} days ago`}
+							? '어제'
+							: `${diffDays}일 전`}
 				</Typo.Caption>
 				<Column className={preventOverflow} justify='end' align='start'>
 					<Typo.Title>{diary.emoji}</Typo.Title>
 					<Typo.Body className={title} weight='strong'>
-						{diary.title || 'Untitled'}
+						{diary.title || '제목없음'}
 					</Typo.Body>
 					<Typo.Caption className={preview}>
-						{diary.content.split('\n')[0].trim() || 'No content yet :('}
+						{diary.content.split('\n')[0].trim() || '아직 내용이 없어요 :('}
 					</Typo.Caption>
 				</Column>
 			</Column>
@@ -8836,229 +9486,142 @@ export default function ExplorerFriendsDetailPage() {
 }
 ````
 
-## File: src/routes/my-profile/page.css.ts
-````typescript
-import { color } from '@/styles/color.css';
-import { style } from '@vanilla-extract/css';
-export const avatarContainer = style({
-	display: 'flex',
-	justifyContent: 'center',
-});
-export const stat = style({
-	width: '100%',
-	backgroundColor: color.cream,
-	borderRadius: 16,
-});
-````
-
-## File: src/components/features/diary/share-drawer.tsx
-````typescript
-import type { OverlayProps } from '@/components/ui/overlay/types';
-import { useOverlay } from '@/hooks/use-overlay';
-import { type Diary, diaryManager } from '@/lib/managers/diary';
-import type { User } from '@/lib/managers/friend';
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
-import { message } from '@tauri-apps/plugin-dialog';
-import {
-	type Dispatch,
-	type SetStateAction,
-	useCallback,
-	useMemo,
-	useState,
-} from 'react';
-import { UserPickerDrawer } from '../user/picker-drawer';
-import { DiaryStopURLSharingPopup } from './stop-url-sharing-popup';
-import { DiaryURLCopiedPopup } from './url-copied-popup';
-interface DiaryShareDrawerProps {
-	diary: Diary;
-	setDiary: Dispatch<SetStateAction<Diary>>;
+## File: src-tauri/src/crypto.rs
+````rust
+use rsa::{pkcs1::{DecodeRsaPrivateKey, DecodeRsaPublicKey, EncodeRsaPrivateKey, EncodeRsaPublicKey}, pkcs1v15::DecryptingKey, rand_core::RngCore, traits::Decryptor, RsaPrivateKey, RsaPublicKey};
+use aes_gcm::{aead::{Aead, KeyInit, OsRng}, Aes256Gcm, Key, Nonce};
+use serde::{Serialize, Deserialize};
+use base64::prelude::*;
+#[derive(Serialize, Deserialize)]
+pub struct DiaryData {
+    pub emoji: String,
+    pub title: String,
+    pub content: String,
+    pub location: Option<String>,
+    pub weather: Option<String>,
+    pub attachments: Vec<Attachment>,
 }
-export function ShareDiaryDrawer(props: DiaryShareDrawerProps & OverlayProps) {
-	const { diary, setDiary, close } = props;
-	const [isProcessing, setIsProcessing] = useState(false);
-	const isSharable = useMemo(
-		() => diary.emoji || diary.title || diary.content,
-		[diary],
-	);
-	const { show: openURLCopied } = useOverlay(DiaryURLCopiedPopup);
-	const { show: openStopURLSharing } = useOverlay(DiaryStopURLSharingPopup);
-	const onClickShare = useCallback(
-		async (selectedUsers: Array<User>) => {
-			if (!isSharable) {
-				await message('Please add some content to your diary before sharing.');
-				return;
-			}
-			setIsProcessing(true);
-			let uuid = diary.uuid;
-			if (uuid === 'NOT_SAVED') {
-				const savedDiary = await diaryManager.addDiary(diary);
-				uuid = savedDiary.uuid;
-			}
-			const result = await diaryManager.shareDiary(uuid, selectedUsers);
-			setDiary(result);
-			setIsProcessing(false);
-			close();
-		},
-		[diary, isSharable, setDiary, close],
-	);
-	const onClickShareViaUrl = useCallback(async () => {
-		if (!isSharable) {
-			await message('Please add some content to your diary before sharing.');
-			return;
-		}
-		try {
-			let uuid = diary.uuid;
-			if (uuid === 'NOT_SAVED') {
-				const savedDiary = await diaryManager.addDiary(diary);
-				uuid = savedDiary.uuid;
-			}
-			const { url, diary: result } = await diaryManager.shareDiaryViaURL(uuid);
-			setDiary(result);
-			await writeText(url);
-			openURLCopied({});
-		} finally {
-			setIsProcessing(false);
-		}
-	}, [isSharable, diary, setDiary, openURLCopied]);
-	const onStopUrlSharingClick = useCallback(async () => {
-		if (!diary.isSharedViaURL) {
-			await message('This diary is not shared via URL.');
-			return;
-		}
-		setIsProcessing(true);
-		try {
-			await diaryManager.stopURLSharingAndReEncrypt(diary.uuid);
-		} finally {
-			setIsProcessing(false);
-		}
-	}, [diary.isSharedViaURL, diary.uuid]);
-	const onClickStopShareViaUrl = useCallback(() => {
-		openStopURLSharing({
-			onStopUrlSharingClick,
-		});
-	}, [openStopURLSharing, onStopUrlSharingClick]);
-	return (
-		<UserPickerDrawer
-			title='Share with your friends'
-			buttons={[
-				{
-					label: diary.isSharedViaURL ? 'Stop URL Sharing' : 'Share via URL',
-					variant: 'secondary',
-					loading: isProcessing,
-					onClick: diary.isSharedViaURL
-						? onClickStopShareViaUrl
-						: onClickShareViaUrl,
-				},
-				{ label: 'Apply', loading: isProcessing, onClick: onClickShare },
-			]}
-			close={close}
-		/>
-	);
+#[derive(Serialize, Deserialize)]
+pub struct Attachment {
+    pub local_id: String,
+    pub remote_url: Option<String>,
 }
-````
-
-## File: src/components/pages/my-profile/change-name.tsx
-````typescript
-import { Container } from '@/components/layout/container';
-import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button/group';
-import { Drawer } from '@/components/ui/drawer';
-import { DrawerTitle } from '@/components/ui/drawer/title';
-import { Input } from '@/components/ui/input';
-import type { OverlayProps } from '@/components/ui/overlay/types';
-import { log } from '@/lib/log';
-import { apiClient } from '@/lib/managers/http';
-import { message } from '@tauri-apps/plugin-dialog';
-import { useCallback, useState } from 'react';
-export function MyProfileChangeNameDrawer(props: OverlayProps) {
-	const { close } = props;
-	const [name, setName] = useState(localStorage.getItem('name') || '');
-	const onClickChange = useCallback(async () => {
-		const prevName = localStorage.getItem('name');
-		if (prevName === name) {
-			close();
-			return;
-		}
-		if (!/^[a-zA-Z\s]+$/.test(name)) {
-			await message('Name can only contain letters and spaces.', {
-				kind: 'error',
-			});
-			close();
-			return;
-		}
-		try {
-			await apiClient.patch('/users/me', {
-				name,
-			});
-			localStorage.setItem('name', name);
-		} catch (error) {
-			await message('Failed to change name');
-			log('error', 'Failed to change name', error);
-			if (prevName) {
-				localStorage.setItem('name', prevName);
-				setName(prevName);
-			}
-		} finally {
-			close();
-		}
-	}, [name, close]);
-	return (
-		<Drawer {...props}>
-			<DrawerTitle>Change name</DrawerTitle>
-			<Container vertical='small'>
-				<Input placeholder='New name' value={name} onValue={setName} />
-			</Container>
-			<ButtonGroup>
-				<Button fill onClick={onClickChange} disabled={!name}>
-					Change
-				</Button>
-			</ButtonGroup>
-		</Drawer>
-	);
+#[derive(Serialize, Deserialize)]
+pub struct ReplyData {
+    pub emoji: String,
+    pub content: String,
 }
-````
-
-## File: src/components/ui/drawer/index.tsx
-````typescript
-import { Container } from '@/components/layout/container';
-import { Row } from '@/components/layout/row';
-import type { BaseProps, HAS_CHILDREN } from '@/types/props';
-import { type PanInfo, motion } from 'motion/react';
-import { useCallback } from 'react';
-import type { OverlayProps } from '../overlay/types';
-import { drawerVariants } from './animation';
-import { drawer, handle } from './styles.css';
-export interface DrawerProps extends BaseProps<HAS_CHILDREN> {}
-export function Drawer(props: DrawerProps & OverlayProps) {
-	const { children: drawerContent, close } = props;
-	const onDragEnd = useCallback(
-		(_: unknown, info: PanInfo) => {
-			if (info.offset.y > 100) {
-				close();
-			}
-		},
-		[close],
-	);
-	return (
-		<motion.div
-			className={drawer}
-			variants={drawerVariants}
-			initial='hidden'
-			animate='visible'
-			exit='hidden'
-			drag='y'
-			dragConstraints={{ top: 0, bottom: 0 }}
-			dragDirectionLock
-			onDragEnd={onDragEnd}
-		>
-			<Container vertical='regular'>
-				<Row justify='center'>
-					<div className={handle} />
-				</Row>
-			</Container>
-			{drawerContent}
-		</motion.div>
-	);
+#[tauri::command]
+pub fn generate_key_pair() -> Result<(String, String), String> {
+    let mut rng = OsRng;
+    let bits = 2048;
+    let private_key = RsaPrivateKey::new(&mut rng, bits)
+        .map_err(|e| format!("Key generation failed: {:?}", e))?;
+    let public_key = RsaPublicKey::from(&private_key);
+    let private_key_pem = private_key.to_pkcs1_pem(Default::default())
+        .map_err(|e| format!("Private key PEM encoding failed: {:?}", e))?
+        .to_string();
+    let public_key_pem = public_key.to_pkcs1_pem(Default::default())
+        .map_err(|e| format!("Public key PEM encoding failed: {:?}", e))?
+        .to_string();
+    Ok((private_key_pem, public_key_pem))
+}
+#[tauri::command]
+pub fn generate_aes_key() -> Result<String, String> {
+    let mut key = [0u8; 32];
+    let mut rng = OsRng;
+    rng.fill_bytes(&mut key);
+    Ok(BASE64_STANDARD.encode(&key))
+}
+#[tauri::command]
+pub fn encrypt_data(data: String, prev_aes_key: Option<String>) -> Result<(String, String, String), String> {
+    let aes_key: [u8; 32] = if let Some(b64) = prev_aes_key {
+        BASE64_STANDARD
+            .decode(b64)
+            .map_err(|e| format!("Failed to decode provided AES key: {:?}", e))?
+            .try_into()
+            .map_err(|_| "Invalid AES key length".to_string())?
+    } else {
+        let mut key = [0u8; 32];
+        let mut rng = OsRng;
+        rng.fill_bytes(&mut key);
+        key
+    };
+    let nonce_bytes: [u8; 12] = rand::random();
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&aes_key));
+    let encrypted_data = cipher
+        .encrypt(nonce, data.as_bytes())
+        .map_err(|e| format!("AES encryption failed: {:?}", e))?;
+    Ok((
+        BASE64_STANDARD.encode(&encrypted_data),
+        BASE64_STANDARD.encode(&aes_key),
+        BASE64_STANDARD.encode(&nonce_bytes),
+    ))
+}
+#[tauri::command]
+pub fn encrypt_key_for_recipient(
+    public_key_pem: String,
+    aes_key: String,
+) -> Result<String, String> {
+    let public_key = RsaPublicKey::from_pkcs1_pem(&public_key_pem)
+        .map_err(|e| format!("Invalid public key: {:?}", e))?;
+    let aes_key = BASE64_STANDARD
+        .decode(&aes_key)
+        .map_err(|e| format!("Failed to decode AES key: {:?}", e))?;
+    let mut rng = OsRng;
+    let encrypted_key = public_key
+        .encrypt(&mut rng, rsa::pkcs1v15::Pkcs1v15Encrypt, &aes_key)
+        .map_err(|e| format!("RSA encryption failed: {:?}", e))?;
+    Ok(BASE64_STANDARD.encode(&encrypted_key))
+}
+#[tauri::command]
+pub fn decrypt_data(
+    private_key_pem: String,
+    encrypted_data_b64: String,
+    encrypted_key_b64: String,
+    nonce_b64: String,
+) -> Result<String, String> {
+    let private_key = RsaPrivateKey::from_pkcs1_pem(&private_key_pem)
+        .map_err(|e| format!("Invalid private key: {:?}", e))?;
+    let encrypted_data = BASE64_STANDARD.decode(encrypted_data_b64)
+        .map_err(|e| format!("encrypted_data decode error: {:?}", e))?;
+    let encrypted_key = BASE64_STANDARD.decode(encrypted_key_b64)
+        .map_err(|e| format!("encrypted_key decode error: {:?}", e))?;
+    let nonce_bytes = BASE64_STANDARD.decode(nonce_b64)
+        .map_err(|e| format!("nonce decode error: {:?}", e))?;
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let decryptor = DecryptingKey::new(private_key);
+    let aes_key = decryptor.decrypt(&encrypted_key)
+        .map_err(|e| format!("RSA decryption failed: {:?}", e))?;
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&aes_key));
+    let decrypted_data = cipher.decrypt(nonce, encrypted_data.as_ref())
+        .map_err(|e| format!("AES decryption failed: {:?}", e))?;
+    let string_data = String::from_utf8(decrypted_data)
+        .map_err(|e| format!("UTF-8 decode error: {:?}", e))?;
+    Ok(string_data)
+}
+#[tauri::command]
+pub fn decrypt_diary(
+    private_key_pem: String,
+    encrypted_data_b64: String,
+    encrypted_key_b64: String,
+    nonce_b64: String,
+) -> Result<DiaryData, String> {
+    let decrypted_json = decrypt_data(private_key_pem, encrypted_data_b64, encrypted_key_b64, nonce_b64)?;
+    serde_json::from_str(&decrypted_json)
+        .map_err(|e| format!("Failed to deserialize DiaryData: {:?}", e))
+}
+#[tauri::command]
+pub fn decrypt_reply(
+    private_key_pem: String,
+    encrypted_data_b64: String,
+    encrypted_key_b64: String,
+    nonce_b64: String,
+) -> Result<ReplyData, String> {
+    let decrypted_json = decrypt_data(private_key_pem, encrypted_data_b64, encrypted_key_b64, nonce_b64)?;
+    serde_json::from_str(&decrypted_json)
+        .map_err(|e| format!("Failed to deserialize ReplyData: {:?}", e))
 }
 ````
 
@@ -9158,13 +9721,13 @@ class LocationManager {
 	getPresetName(key: LocationPresetKey) {
 		switch (key) {
 			case 'home':
-				return 'Home';
+				return '집';
 			case 'secondHome':
-				return 'Home 2';
+				return '두 번째 집';
 			case 'school':
-				return 'School';
+				return '학교';
 			case 'work':
-				return 'Work';
+				return '직장';
 			default:
 				return key;
 		}
@@ -9285,486 +9848,6 @@ class LocationManager {
 export const locationManager = new LocationManager();
 ````
 
-## File: src/routes/explorer/diaries/detail.tsx
-````typescript
-import { DeleteDiaryPopup } from '@/components/features/diary/delete-popup';
-import { Column } from '@/components/layout/column';
-import { Container } from '@/components/layout/container';
-import { Row } from '@/components/layout/row';
-import { ExplorerContent } from '@/components/pages/explorer/shared/content';
-import { Avatar } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button/group';
-import { PaddingDivider } from '@/components/ui/divider/padding';
-import { TopNavigator } from '@/components/ui/top-navigator';
-import { GoBack } from '@/components/ui/top-navigator/go-back';
-import { Typo } from '@/components/ui/typography';
-import { useOverlay } from '@/hooks/use-overlay';
-import { diaryManager } from '@/lib/managers/diary';
-import { friendManager } from '@/lib/managers/friend';
-import { color } from '@/styles/color.css';
-import { useCallback, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-export default function ExplorerDiariesDetailPage() {
-	const { uuid } = useParams();
-	const navigate = useNavigate();
-	const diary = useMemo(() => diaryManager.getDiary(uuid || ''), [uuid]);
-	const { show: openDiaryDelete } = useOverlay(DeleteDiaryPopup);
-	const onClickDeleteDiary = useCallback(() => {
-		if (diary) {
-			openDiaryDelete({ diary, callback: () => navigate(-1) });
-		}
-	}, [diary, navigate, openDiaryDelete]);
-	if (!diary) {
-		console.error('Diary not found:', uuid);
-		navigate(-1);
-		return;
-	}
-	return (
-		<>
-			<TopNavigator leadingArea={<GoBack label='Diaries' />} />
-			<Container vertical='small'>
-				<Typo.Title weight='strong'>{diary.title}</Typo.Title>
-			</Container>
-			<Container vertical='small'>
-				<Row align='center' justify='start' gap={8}>
-					<Avatar
-						size={32}
-						src={
-							diary.sharedBy
-								? friendManager.getFriend(diary.sharedBy)?.profileUrl
-								: localStorage.getItem('profileImage')
-						}
-					/>
-					<Typo.Body weight='medium'>
-						{diary.sharedBy
-							? `Shared by ${friendManager.getFriend(diary.sharedBy)?.name}`
-							: `by ${localStorage.getItem('name')}`}
-					</Typo.Body>
-				</Row>
-			</Container>
-			<PaddingDivider />
-			<ExplorerContent
-				label='Encrypted Data'
-				content={diary.encryptedData?.toString() || 'No data available'}
-			/>
-			<PaddingDivider />
-			<ExplorerContent
-				label='Nonce'
-				content={diary.nonce?.toString() || 'No data available'}
-			/>
-			<PaddingDivider />
-			{diary.encryptedKey && (
-				<ExplorerContent
-					label='Encrypted Key'
-					content={diary.encryptedKey?.toString() || 'No data available'}
-				/>
-			)}
-			{/* <Container vertical='small'>
-				<Typo.Body>Share via URL is enabled</Typo.Body>
-			</Container> */}
-			<Container>
-				<Column gap={8}>
-					<Typo.Caption color={color.sand}>
-						Created : {new Date(diary.createdAt).toLocaleString()}
-					</Typo.Caption>
-					<Typo.Caption color={color.sand}>
-						Last Edited : {new Date(diary.updatedAt).toLocaleString()}
-					</Typo.Caption>
-				</Column>
-			</Container>
-			<ButtonGroup float>
-				<Button fill onClick={onClickDeleteDiary}>
-					Delete diary
-				</Button>
-			</ButtonGroup>
-		</>
-	);
-}
-````
-
-## File: src/App.tsx
-````typescript
-import '@/styles/reset.css';
-import '@/styles/font.css';
-import { Suspense, createContext, useReducer } from 'react';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
-import { OverlayProvider } from './components/ui/overlay/provider';
-import { useCheckInitialized } from './hooks/use-check-initialized';
-import {
-	DiaryPage,
-	ExplorerDiariesDetailPage,
-	ExplorerDiariesPage,
-	ExplorerFriendsDetailPage,
-	ExplorerFriendsPage,
-	HomePage,
-	IndexPage,
-	MyProfilePage,
-	SignInBiometricPage,
-	SignInForgotPinPage,
-	SignInPinPage,
-	SignUpPage,
-} from './routes';
-import ExplorerLocationAliasPage from './routes/explorer/location-alias';
-export const AppContext = createContext({} as { forceUpdate: () => unknown });
-export default function App() {
-	const [, forceUpdate] = useReducer((x) => x + 1, 0);
-	useCheckInitialized();
-	return (
-		<AppContext value={{ forceUpdate }}>
-			<BrowserRouter>
-				<OverlayProvider>
-					<Suspense fallback={<div>Loading...</div>}>
-						<Routes>
-							<Route path='/' element={<IndexPage />} />
-							<Route path='/sign-up' element={<SignUpPage />} />
-							<Route
-								path='/sign-in/biometric'
-								element={<SignInBiometricPage />}
-							/>
-							<Route path='/sign-in/pin' element={<SignInPinPage />} />
-							<Route
-								path='/sign-in/forgot-pin'
-								element={<SignInForgotPinPage />}
-							/>
-							<Route path='/home' element={<HomePage />} />
-							<Route path='/diary' element={<DiaryPage />} />
-							<Route path='/my-profile' element={<MyProfilePage />} />
-							<Route
-								path='/explorer/diaries'
-								element={<ExplorerDiariesPage />}
-							/>
-							<Route
-								path='/explorer/diaries/:uuid'
-								element={<ExplorerDiariesDetailPage />}
-							/>
-							<Route
-								path='/explorer/friends'
-								element={<ExplorerFriendsPage />}
-							/>
-							<Route
-								path='/explorer/friends/:uuid'
-								element={<ExplorerFriendsDetailPage />}
-							/>
-							<Route
-								path='/explorer/location-alias'
-								element={<ExplorerLocationAliasPage />}
-							/>
-						</Routes>
-					</Suspense>
-				</OverlayProvider>
-			</BrowserRouter>
-		</AppContext>
-	);
-}
-````
-
-## File: package.json
-````json
-{
-	"name": "sotto-app",
-	"private": true,
-	"version": "1.2.0",
-	"type": "module",
-	"config": {
-		"commitizen": {
-			"path": "./node_modules/cz-conventional-changelog"
-		}
-	},
-	"scripts": {
-		"dev": "vite",
-		"build": "tsc && vite build",
-		"ios": "tauri ios dev \"iPhone 16 Pro\"",
-		"android": "tauri android dev \"Pixel_7_Pro\"",
-		"tauri": "tauri",
-		"check": "biome check",
-		"format": "biome check --fix && bun repomix",
-		"repomix": "repomix -c ./repomix.config.json",
-		"build:ios-sim": "rimraf ./src-tauri/gen/apple/build/arm64-sim && tauri ios build --target aarch64-sim",
-		"build:android": "tauri android build",
-		"build:all": "bun build:ios-sim && bun build:android",
-		"commit": "bun format && git add . && cz"
-	},
-	"dependencies": {
-		"@tauri-apps/api": "^2.5.0",
-		"@tauri-apps/plugin-biometric": "~2",
-		"@tauri-apps/plugin-clipboard-manager": "~2",
-		"@tauri-apps/plugin-dialog": "~2",
-		"@tauri-apps/plugin-fs": "~2",
-		"@tauri-apps/plugin-http": "~2",
-		"@tauri-apps/plugin-log": "~2",
-		"@tauri-apps/plugin-opener": "^2.2.6",
-		"@tauri-apps/plugin-stronghold": "^2.2.0",
-		"@vanilla-extract/css": "^1.17.1",
-		"classnames": "^2.5.1",
-		"dayjs": "^1.11.13",
-		"emojibase-data": "^16.0.3",
-		"lucide-react": "^0.510.0",
-		"motion": "^12.10.5",
-		"nanoid": "^5.1.5",
-		"nuqs": "^2.4.3",
-		"react": "^19.1.0",
-		"react-dom": "^19.1.0",
-		"react-router-dom": "^7.6.0",
-		"tauri-plugin-keychain": "^2.0.1",
-		"use-debounce": "^10.0.4",
-		"uuid": "^11.1.0"
-	},
-	"devDependencies": {
-		"@biomejs/biome": "^1.9.4",
-		"@commitlint/cli": "^19.8.1",
-		"@commitlint/config-conventional": "^19.8.1",
-		"@tauri-apps/cli": "^2.5.0",
-		"@types/react": "^19.1.3",
-		"@types/react-dom": "^19.1.3",
-		"@vanilla-extract/vite-plugin": "^5.0.1",
-		"@vitejs/plugin-react": "^4.4.1",
-		"commitizen": "^4.3.1",
-		"cz-conventional-changelog": "^3.3.0",
-		"repomix": "^0.3.7",
-		"rimraf": "^6.0.1",
-		"typescript": "~5.8.3",
-		"vite": "^6.3.5"
-	}
-}
-````
-
-## File: src/routes/diary/index.tsx
-````typescript
-import { ShareDiaryDrawer } from '@/components/features/diary/share-drawer';
-import { DiaryRepliesDrawer } from '@/components/features/reply/replies-drawer';
-import { DiarySendReplyDrawer } from '@/components/features/reply/send-reply-drawer';
-import { Column } from '@/components/layout/column';
-import { Container } from '@/components/layout/container';
-import { Row } from '@/components/layout/row';
-import { DiaryAdditionalInfo } from '@/components/pages/diary/additional-info';
-import { DiaryContext } from '@/components/pages/diary/context';
-import { DiarySavingPopup } from '@/components/pages/diary/saving-popup';
-import { Divider } from '@/components/ui/divider';
-import { EmojiInput } from '@/components/ui/input/emoji';
-import { TopNavigator } from '@/components/ui/top-navigator';
-import { GoBack } from '@/components/ui/top-navigator/go-back';
-import { Typo } from '@/components/ui/typography';
-import { useDiary } from '@/hooks/use-diary';
-import { useOverlay } from '@/hooks/use-overlay';
-import { log } from '@/lib/log';
-import { diaryManager } from '@/lib/managers/diary';
-import { color } from '@/styles/color.css';
-import { MessageCircle, Share, SmilePlus } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { page, textArea, textAreaContainer, titleInput } from './page.css';
-export default function DiaryPage() {
-	const [searchParams] = useSearchParams();
-	const diaryUUID = useMemo(() => searchParams.get('uuid'), [searchParams]);
-	const isReadOnly = useMemo(
-		() => searchParams.get('readonly') === 'true',
-		[searchParams],
-	);
-	const [diary, diaryDispatch] = useDiary(diaryUUID);
-	const { setDiary, setEmoji, setTitle, setContent } = diaryDispatch;
-	const [isSaving, setIsSaving] = useState(false);
-	const { show: openShareDrawer } = useOverlay(ShareDiaryDrawer, {
-		preventBackdropClose: isSaving,
-	});
-	const { show: openSavingPopup, hide: closeSavingPopup } = useOverlay(
-		DiarySavingPopup,
-		{ preventBackdropClose: true },
-	);
-	const { show: openSendReply } = useOverlay(DiarySendReplyDrawer);
-	const { show: openReplies } = useOverlay(DiaryRepliesDrawer);
-	const saveDiary = useCallback(async () => {
-		if ((!diary.emoji && !diary.title && !diary.content) || diary.readonly) {
-			return;
-		}
-		setIsSaving(true);
-		openSavingPopup({});
-		try {
-			if (diaryManager.getDiary(diary.uuid)) {
-				await diaryManager.updateDiary(diary.uuid, diary);
-			} else {
-				await diaryManager.addDiary(diary);
-			}
-		} catch (error) {
-			log('error', 'Error while saving diary', error);
-			console.error('Error while saving diary', error);
-		} finally {
-			setIsSaving(false);
-			closeSavingPopup();
-		}
-	}, [diary, openSavingPopup, closeSavingPopup]);
-	const onClickShare = useCallback(() => {
-		openShareDrawer({ diary, setDiary });
-	}, [diary, setDiary, openShareDrawer]);
-	const onClickSendReply = useCallback(() => {
-		openSendReply({ diary });
-	}, [diary, openSendReply]);
-	const onClickViewReplies = useCallback(() => {
-		openReplies({ diary });
-	}, [diary, openReplies]);
-	return (
-		<DiaryContext value={{ diary, diaryDispatch }}>
-			<Column className={page} justify='start'>
-				<TopNavigator
-					leadingArea={<GoBack beforeBack={saveDiary} />}
-					trailingArea={
-						isReadOnly ? (
-							<SmilePlus onClick={onClickSendReply} />
-						) : (
-							<Row gap={16}>
-								<MessageCircle onClick={onClickViewReplies} />
-								<Share onClick={onClickShare} />
-							</Row>
-						)
-					}
-				/>
-				<Container vertical='large' horizontal='large'>
-					<Column gap={24}>
-						<Column gap={12}>
-							<EmojiInput
-								defaultValue={diary.emoji}
-								onValue={setEmoji}
-								disabled={isSaving || isReadOnly}
-							/>
-							<input
-								className={titleInput}
-								placeholder='New Diary'
-								value={diary.title}
-								onChange={(e) => setTitle(e.target.value)}
-								disabled={isSaving || isReadOnly}
-							/>
-							<Typo.Caption
-								color={color.sand}
-							>{`Last Edited : ${new Date(diary.updatedAt).toLocaleString()}`}</Typo.Caption>
-						</Column>
-						<DiaryAdditionalInfo />
-					</Column>
-				</Container>
-				<Divider />
-				<Container
-					className={textAreaContainer}
-					vertical='large'
-					horizontal='large'
-				>
-					<textarea
-						className={textArea}
-						placeholder='Write your diary'
-						value={diary.content}
-						onChange={(e) => setContent(e.target.value)}
-						disabled={isSaving || isReadOnly}
-					/>
-				</Container>
-			</Column>
-		</DiaryContext>
-	);
-}
-````
-
-## File: src/routes/my-profile/index.tsx
-````typescript
-import packageJson from '@/../package.json';
-import { Column } from '@/components/layout/column';
-import { Container } from '@/components/layout/container';
-import { Row } from '@/components/layout/row';
-import { MyProfileChangeNameDrawer } from '@/components/pages/my-profile/change-name';
-import { MyProfileExplorerItem } from '@/components/pages/my-profile/explorer-item';
-import { MyProfileImage } from '@/components/pages/my-profile/image';
-import { MyProfileResetConfirmDrawer } from '@/components/pages/my-profile/reset-confirm';
-import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button/group';
-import { PaddingDivider } from '@/components/ui/divider/padding';
-import { TopNavigator } from '@/components/ui/top-navigator';
-import { GoBack } from '@/components/ui/top-navigator/go-back';
-import { Typo } from '@/components/ui/typography';
-import { useDrawer } from '@/hooks/use-drawer';
-import { diaryManager } from '@/lib/managers/diary';
-import { friendManager } from '@/lib/managers/friend';
-import { color } from '@/styles/color.css';
-import { ChevronRight, MapPin } from 'lucide-react';
-import { useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { avatarContainer, stat } from './page.css';
-export default function MyProfilePage() {
-	const { show: openChangeName } = useDrawer(MyProfileChangeNameDrawer);
-	const { show: openResetConfirm } = useDrawer(MyProfileResetConfirmDrawer);
-	const navigate = useNavigate();
-	const onClickLock = useCallback(() => {
-		location.reload();
-	}, []);
-	return (
-		<>
-			<Column>
-				<TopNavigator trailingArea={<GoBack />} />
-				<Container className={avatarContainer}>
-					<MyProfileImage />
-				</Container>
-				<Column align='center' gap={8}>
-					<Typo.Lead weight='strong'>{localStorage.getItem('name')}</Typo.Lead>
-					<Typo.Body>@{localStorage.getItem('username')}</Typo.Body>
-				</Column>
-				<Container vertical='large' horizontal='large'>
-					<Button fill onClick={openChangeName}>
-						Change name
-					</Button>
-				</Container>
-				<Container vertical='none'>
-					<Row gap={8}>
-						<Stat
-							name='Diary'
-							value={diaryManager.getAllDiaries().length}
-							onClick={() => navigate('/explorer/diaries')}
-						/>
-						<Stat
-							name='Friend'
-							value={friendManager.getFriends().length}
-							onClick={() => navigate('/explorer/friends')}
-						/>
-					</Row>
-				</Container>
-				<PaddingDivider />
-				<MyProfileExplorerItem
-					icon={<MapPin size={20} />}
-					name='Location alias'
-					path='/explorer/location-alias'
-				/>
-				<Container vertical='large'>
-					<Typo.Caption color={color.sand}>
-						Version {packageJson.version} {import.meta.env.MODE}
-					</Typo.Caption>
-				</Container>
-				<ButtonGroup direction='vertical' float>
-					<Button variant='text' fill onClick={openResetConfirm}>
-						Reset
-					</Button>
-					<Button fill variant='secondary' onClick={onClickLock}>
-						Lock the app
-					</Button>
-				</ButtonGroup>
-			</Column>
-		</>
-	);
-}
-interface StatProps {
-	name: string;
-	value: string | number;
-	onClick?: () => void;
-}
-function Stat(props: StatProps) {
-	const { name, value, onClick } = props;
-	return (
-		<Container className={stat} onClick={onClick}>
-			<Column gap={8}>
-				<Row justify='space-between' align='center'>
-					<Typo.Body weight='medium'>{name}</Typo.Body>
-					<ChevronRight size={20} />
-				</Row>
-				<Typo.Title weight='strong'>{value.toString()}</Typo.Title>
-			</Column>
-		</Container>
-	);
-}
-````
-
 ## File: src/components/pages/home/friends-diaries.tsx
 ````typescript
 import { decryptDiary } from '@/binding/function/decrypt-diary';
@@ -9859,7 +9942,7 @@ export function HomeFriendsDiariesSection() {
 	) : (
 		<Content
 			icon={<SmilePlus size={48} />}
-			description='Share this app to your friends'
+			description='친구에게 이 앱을 공유해보세요'
 		/>
 	);
 }
@@ -9907,47 +9990,843 @@ function FriendDiaries(props: FriendDiariesProps) {
 }
 ````
 
+## File: src/routes/explorer/diaries/detail.tsx
+````typescript
+import { DeleteDiaryPopup } from '@/components/features/diary/delete-popup';
+import { Column } from '@/components/layout/column';
+import { Container } from '@/components/layout/container';
+import { Row } from '@/components/layout/row';
+import { ExplorerContent } from '@/components/pages/explorer/shared/content';
+import { Avatar } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button/group';
+import { PaddingDivider } from '@/components/ui/divider/padding';
+import { TopNavigator } from '@/components/ui/top-navigator';
+import { GoBack } from '@/components/ui/top-navigator/go-back';
+import { Typo } from '@/components/ui/typography';
+import { useOverlay } from '@/hooks/use-overlay';
+import { bytesToSize } from '@/lib/common';
+import { diaryManager } from '@/lib/managers/diary';
+import { friendManager } from '@/lib/managers/friend';
+import { color } from '@/styles/color.css';
+import { useCallback, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+export default function ExplorerDiariesDetailPage() {
+	const { uuid } = useParams();
+	const navigate = useNavigate();
+	const diary = useMemo(() => diaryManager.getDiary(uuid || ''), [uuid]);
+	const [showEncryptedData, setShowEncryptedData] = useState(false);
+	const { show: openDiaryDelete } = useOverlay(DeleteDiaryPopup);
+	const onClickRevealData = useCallback(() => {
+		setShowEncryptedData(true);
+	}, []);
+	const onClickDeleteDiary = useCallback(() => {
+		if (diary) {
+			openDiaryDelete({ diary, callback: () => navigate(-1) });
+		}
+	}, [diary, navigate, openDiaryDelete]);
+	if (!diary) {
+		console.error('Diary not found:', uuid);
+		navigate(-1);
+		return;
+	}
+	return (
+		<>
+			<TopNavigator leadingArea={<GoBack label='일기' />} />
+			<Container vertical='small'>
+				<Typo.Title weight='strong'>{diary.title || '제목 없음'}</Typo.Title>
+			</Container>
+			<Container vertical='small'>
+				<Row align='center' justify='start' gap={8}>
+					<Avatar
+						size={32}
+						src={
+							diary.sharedBy
+								? friendManager.getFriend(diary.sharedBy)?.profileUrl
+								: localStorage.getItem('profileImage')
+						}
+					/>
+					<Typo.Body weight='medium'>
+						{diary.sharedBy
+							? `${friendManager.getFriend(diary.sharedBy)?.name}님이 공유함`
+							: `${localStorage.getItem('name')}님 작성`}
+					</Typo.Body>
+				</Row>
+			</Container>
+			<PaddingDivider />
+			{showEncryptedData ? (
+				<ExplorerContent
+					label='암호화된 데이터'
+					content={diary.encryptedData?.toString() || '데이터 없음'}
+				/>
+			) : (
+				<Container>
+					<Button fill variant='secondary' onClick={onClickRevealData}>
+						데이터 보기 - {bytesToSize(diary.encryptedData?.length ?? 0)}
+					</Button>
+				</Container>
+			)}
+			<PaddingDivider />
+			<ExplorerContent
+				label='Nonce'
+				content={diary.nonce?.toString() || '데이터 없음'}
+			/>
+			<PaddingDivider />
+			{diary.encryptedKey && (
+				<ExplorerContent
+					label='암호화된 키'
+					content={diary.encryptedKey?.toString() || '데이터 없음'}
+				/>
+			)}
+			{/* <Container vertical='small'>
+				<Typo.Body>Share via URL is enabled</Typo.Body>
+			</Container> */}
+			<Container>
+				<Column gap={8}>
+					<Typo.Caption color={color.sand}>
+						생성: {new Date(diary.createdAt).toLocaleString()}
+					</Typo.Caption>
+					<Typo.Caption color={color.sand}>
+						마지막 수정: {new Date(diary.updatedAt).toLocaleString()}
+					</Typo.Caption>
+				</Column>
+			</Container>
+			<ButtonGroup float>
+				<Button fill onClick={onClickDeleteDiary}>
+					일기 삭제
+				</Button>
+			</ButtonGroup>
+		</>
+	);
+}
+````
+
+## File: src/App.tsx
+````typescript
+import '@/styles/reset.css';
+import '@/styles/font.css';
+import { Suspense, createContext, useReducer } from 'react';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { OverlayProvider } from './components/ui/overlay/provider';
+import { useCheckInitialized } from './hooks/use-check-initialized';
+import {
+	DiaryPage,
+	ExplorerDiariesDetailPage,
+	ExplorerDiariesPage,
+	ExplorerFriendsDetailPage,
+	ExplorerFriendsPage,
+	HomePage,
+	IndexPage,
+	MyProfilePage,
+	SignInBiometricPage,
+	SignInForgotPinPage,
+	SignInPinPage,
+	SignUpPage,
+} from './routes';
+import ExplorerLocationAliasPage from './routes/explorer/location-alias';
+export const AppContext = createContext({} as { forceUpdate: () => unknown });
+export default function App() {
+	const [, forceUpdate] = useReducer((x) => x + 1, 0);
+	useCheckInitialized();
+	return (
+		<AppContext value={{ forceUpdate }}>
+			<BrowserRouter>
+				<OverlayProvider>
+					<Suspense>
+						<Routes>
+							<Route path='/' element={<IndexPage />} />
+							<Route path='/sign-up' element={<SignUpPage />} />
+							<Route
+								path='/sign-in/biometric'
+								element={<SignInBiometricPage />}
+							/>
+							<Route path='/sign-in/pin' element={<SignInPinPage />} />
+							<Route
+								path='/sign-in/forgot-pin'
+								element={<SignInForgotPinPage />}
+							/>
+							<Route path='/home' element={<HomePage />} />
+							<Route path='/diary' element={<DiaryPage />} />
+							<Route path='/my-profile' element={<MyProfilePage />} />
+							<Route
+								path='/explorer/diaries'
+								element={<ExplorerDiariesPage />}
+							/>
+							<Route
+								path='/explorer/diaries/:uuid'
+								element={<ExplorerDiariesDetailPage />}
+							/>
+							<Route
+								path='/explorer/friends'
+								element={<ExplorerFriendsPage />}
+							/>
+							<Route
+								path='/explorer/friends/:uuid'
+								element={<ExplorerFriendsDetailPage />}
+							/>
+							<Route
+								path='/explorer/location-alias'
+								element={<ExplorerLocationAliasPage />}
+							/>
+						</Routes>
+					</Suspense>
+				</OverlayProvider>
+			</BrowserRouter>
+		</AppContext>
+	);
+}
+````
+
+## File: src/components/pages/diary/attachments.tsx
+````typescript
+import { AttachmentFocus } from '@/components/features/attachment/focus';
+import { Column } from '@/components/layout/column';
+import { Container } from '@/components/layout/container';
+import { Row } from '@/components/layout/row';
+import { LoadingCircle } from '@/components/ui/loading-circle';
+import { Typo } from '@/components/ui/typography';
+import { useOverlay } from '@/hooks/use-overlay';
+import { cn } from '@/lib/common';
+import { decryptAttachment } from '@/lib/managers/attachment';
+import { fileStorage } from '@/lib/managers/file';
+import { fullHeight } from '@/styles/utils.css';
+import type { BaseProps, HAS_CHILDREN } from '@/types/props';
+import { message } from '@tauri-apps/plugin-dialog';
+import { ImagePlus } from 'lucide-react';
+import {
+	type ChangeEvent,
+	useCallback,
+	useContext,
+	useEffect,
+	useRef,
+	useState,
+} from 'react';
+import { v4 } from 'uuid';
+import { DiaryContext } from './context';
+import { image, input, item, list } from './styles/attachments.css';
+export function DiaryAttachments() {
+	const { diary } = useContext(DiaryContext);
+	return (
+		<Container className={list} vertical='large' horizontal='large'>
+			<Row gap={8} justify='start'>
+				{diary.attachments.length < 5 && !diary.readonly ? <AddPhoto /> : null}
+				{diary.attachments.map((a, i) => (
+					<AttachmentItem key={i.toString()} attachment={a} />
+				))}
+			</Row>
+		</Container>
+	);
+}
+function AddPhoto() {
+	const inputRef = useRef<HTMLInputElement>(null);
+	const {
+		diary,
+		diaryDispatch: { setAttachments },
+		setIsAttachmentUpdated,
+	} = useContext(DiaryContext);
+	const onClick = useCallback(() => {
+		if (inputRef.current) {
+			inputRef.current.click();
+		}
+	}, []);
+	const onChange = useCallback(
+		async (e: ChangeEvent<HTMLInputElement>) => {
+			const files = e.target.files;
+			if (!files || files.length === 0) return;
+			const fileList = Array.from(files).filter(
+				(file) => file.size <= 3.5 * 1024 * 1024,
+			);
+			if (diary.attachments.length + fileList.length > 5) {
+				await message('사진은 최대 5장까지 추가할 수 있어요.', {
+					kind: 'error',
+				});
+				return;
+			}
+			if (fileList.length < files.length) {
+				await message(
+					'일부 파일이 너무 커서 추가되지 않았어요. 최대 크기는 3.5MB예요.',
+				);
+			}
+			if (fileList.length === 0) {
+				await message('유효한 파일이 선택되지 않았어요.');
+				return;
+			}
+			const newAttachments = await Promise.all(
+				fileList.map(async (file) => {
+					const id = v4();
+					await fileStorage.saveFile(id, file);
+					return { local_id: id };
+				}),
+			);
+			setAttachments([...newAttachments, ...diary.attachments]);
+			setIsAttachmentUpdated(true);
+		},
+		[diary.attachments, setAttachments, setIsAttachmentUpdated],
+	);
+	return (
+		<Item onClick={onClick}>
+			<Column className={fullHeight} gap={8} align='center'>
+				<ImagePlus />
+				<Typo.Caption weight='medium'>사진 추가</Typo.Caption>
+			</Column>
+			<input
+				ref={inputRef}
+				className={input}
+				type='file'
+				accept='image/*'
+				multiple
+				onChange={onChange}
+			/>
+		</Item>
+	);
+}
+interface AttachmentProps {
+	attachment: Attachment;
+}
+function AttachmentItem(props: AttachmentProps) {
+	const { attachment } = props;
+	const [isLoading, setIsLoading] = useState(true);
+	const [previewUrl, setPreviewUrl] = useState('');
+	const {
+		diary,
+		diaryDispatch: { setAttachments },
+		setIsAttachmentUpdated,
+	} = useContext(DiaryContext);
+	const { show: showFocus, hide: hideFocus } = useOverlay(AttachmentFocus);
+	const getAttachment = useCallback(async () => {
+		let url: string;
+		if (diary.readonly && attachment.remote_url) {
+			if (!diary.encryptedKey) {
+				throw new Error('Diary is read-only and no AES key is available.');
+			}
+			url = await decryptAttachment(attachment.remote_url, diary.encryptedKey);
+		} else {
+			const saved = await fileStorage.getFile(attachment.local_id);
+			if (!saved) {
+				throw new Error('File not found');
+			}
+			const file = saved;
+			url = URL.createObjectURL(file);
+		}
+		setPreviewUrl(url);
+		setIsLoading(false);
+	}, [attachment, diary]);
+	const deleteAttachment = useCallback(async () => {
+		if (diary.readonly) {
+			throw new Error('not implemented');
+		}
+		await fileStorage.deleteFile(attachment.local_id);
+		setAttachments(
+			diary.attachments.filter((a) => a.local_id !== attachment.local_id),
+		);
+		setIsAttachmentUpdated(true);
+		URL.revokeObjectURL(previewUrl);
+		hideFocus();
+	}, [
+		attachment,
+		diary,
+		hideFocus,
+		previewUrl,
+		setAttachments,
+		setIsAttachmentUpdated,
+	]);
+	const onClick = useCallback(() => {
+		showFocus({ previewUrl, handleDelete: deleteAttachment });
+	}, [previewUrl, showFocus, deleteAttachment]);
+	useEffect(() => {
+		getAttachment();
+	}, [getAttachment]);
+	return (
+		<Item>
+			{isLoading ? (
+				<Column className={fullHeight} align='center'>
+					<LoadingCircle />
+				</Column>
+			) : (
+				<img
+					className={image}
+					src={previewUrl}
+					alt='첨부 이미지 미리보기'
+					draggable={false}
+					onClick={onClick}
+				/>
+			)}
+		</Item>
+	);
+}
+interface ItemProps extends BaseProps<HAS_CHILDREN> {
+	onClick?: () => unknown;
+}
+function Item(props: ItemProps) {
+	const { className, children, onClick } = props;
+	return (
+		<div className={cn(item, className)} onClick={onClick}>
+			{children}
+		</div>
+	);
+}
+````
+
+## File: src/routes/my-profile/index.tsx
+````typescript
+import packageJson from '@/../package.json';
+import { Column } from '@/components/layout/column';
+import { Container } from '@/components/layout/container';
+import { Row } from '@/components/layout/row';
+import { MyProfileChangeNameDrawer } from '@/components/pages/my-profile/change-name';
+import { MyProfileExplorerItem } from '@/components/pages/my-profile/explorer-item';
+import { MyProfileImage } from '@/components/pages/my-profile/image';
+import { MyProfileResetConfirmDrawer } from '@/components/pages/my-profile/reset-confirm';
+import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button/group';
+import { PaddingDivider } from '@/components/ui/divider/padding';
+import { TopNavigator } from '@/components/ui/top-navigator';
+import { GoBack } from '@/components/ui/top-navigator/go-back';
+import { Typo } from '@/components/ui/typography';
+import { useDrawer } from '@/hooks/use-drawer';
+import { diaryManager } from '@/lib/managers/diary';
+import { friendManager } from '@/lib/managers/friend';
+import { color } from '@/styles/color.css';
+import { ChevronRight, MapPin } from 'lucide-react';
+import { useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { avatarContainer, stat } from './page.css';
+export default function MyProfilePage() {
+	const { show: openChangeName } = useDrawer(MyProfileChangeNameDrawer);
+	const { show: openResetConfirm } = useDrawer(MyProfileResetConfirmDrawer);
+	const navigate = useNavigate();
+	const onClickLock = useCallback(() => {
+		location.reload();
+	}, []);
+	return (
+		<>
+			<Column>
+				<TopNavigator trailingArea={<GoBack />} />
+				<Container className={avatarContainer}>
+					<MyProfileImage />
+				</Container>
+				<Column align='center' gap={8}>
+					<Typo.Lead weight='strong'>{localStorage.getItem('name')}</Typo.Lead>
+					<Typo.Body>@{localStorage.getItem('username')}</Typo.Body>
+				</Column>
+				<Container vertical='large' horizontal='large'>
+					<Button fill onClick={openChangeName} disabled>
+						이름 변경
+					</Button>
+				</Container>
+				<Container vertical='none'>
+					<Row gap={8}>
+						<Stat
+							name='일기'
+							value={diaryManager.getAllDiaries().length}
+							onClick={() => navigate('/explorer/diaries')}
+						/>
+						<Stat
+							name='친구'
+							value={friendManager.getFriends().length}
+							onClick={() => navigate('/explorer/friends')}
+						/>
+					</Row>
+				</Container>
+				<PaddingDivider />
+				<MyProfileExplorerItem
+					icon={<MapPin size={20} />}
+					name='위치 별칭'
+					path='/explorer/location-alias'
+				/>
+				<Container vertical='large'>
+					<Typo.Caption color={color.sand}>
+						Version {packageJson.version} - {import.meta.env.MODE}
+					</Typo.Caption>
+				</Container>
+				<ButtonGroup direction='vertical' float>
+					<Button variant='text' fill onClick={openResetConfirm}>
+						초기화
+					</Button>
+					<Button fill variant='secondary' onClick={onClickLock} disabled>
+						앱 잠그기
+					</Button>
+				</ButtonGroup>
+			</Column>
+		</>
+	);
+}
+interface StatProps {
+	name: string;
+	value: string | number;
+	onClick?: () => void;
+}
+function Stat(props: StatProps) {
+	const { name, value, onClick } = props;
+	return (
+		<Container className={stat} onClick={onClick}>
+			<Column gap={8}>
+				<Row justify='space-between' align='center'>
+					<Typo.Body weight='medium'>{name}</Typo.Body>
+					<ChevronRight size={20} />
+				</Row>
+				<Typo.Title weight='strong'>{value.toString()}</Typo.Title>
+			</Column>
+		</Container>
+	);
+}
+````
+
+## File: src/components/features/diary/share-drawer.tsx
+````typescript
+import type { OverlayProps } from '@/components/ui/overlay/types';
+import { useOverlay } from '@/hooks/use-overlay';
+import { diaryManager } from '@/lib/managers/diary';
+import type { User } from '@/lib/managers/friend';
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+import { message } from '@tauri-apps/plugin-dialog';
+import {
+	type Dispatch,
+	type SetStateAction,
+	useCallback,
+	useMemo,
+	useState,
+} from 'react';
+import { UserPickerDrawer } from '../user/picker-drawer';
+import { DiaryStopURLSharingPopup } from './stop-url-sharing-popup';
+import { DiaryURLCopiedPopup } from './url-copied-popup';
+interface DiaryShareDrawerProps {
+	diary: Diary;
+	isAttachmentUpdated: boolean;
+	setDiary: Dispatch<SetStateAction<Diary>>;
+}
+export function ShareDiaryDrawer(props: DiaryShareDrawerProps & OverlayProps) {
+	const { diary, setDiary, close } = props;
+	const [isProcessing, setIsProcessing] = useState(false);
+	const isSharable = useMemo(
+		() => diary.emoji || diary.title || diary.content,
+		[diary],
+	);
+	const { show: openURLCopied } = useOverlay(DiaryURLCopiedPopup);
+	const { show: openStopURLSharing } = useOverlay(DiaryStopURLSharingPopup);
+	const onClickShare = useCallback(
+		async (selectedUsers: Array<User>) => {
+			if (!isSharable) {
+				await message('일기를 공유하려면 내용을 추가해주세요.');
+				return;
+			}
+			if (!diary.shareUUID && selectedUsers.length === 0) {
+				await message('일기를 공유하려면 최소 한 명의 사용자를 선택해주세요.');
+				return;
+			}
+			setIsProcessing(true);
+			let uuid = diary.uuid;
+			let result: Diary;
+			if (uuid === 'NOT_SAVED') {
+				const savedDiary = await diaryManager.addDiary(diary);
+				uuid = savedDiary.uuid;
+			}
+			if (selectedUsers.length > 0) {
+				result = await diaryManager.shareDiary(uuid, selectedUsers);
+			} else {
+				result = await diaryManager.cancelShare(uuid);
+			}
+			setDiary(result);
+			setIsProcessing(false);
+			close();
+		},
+		[diary, isSharable, setDiary, close],
+	);
+	const onClickShareViaUrl = useCallback(async () => {
+		if (!isSharable) {
+			await message('일기를 공유하려면 내용을 추가해주세요.');
+			return;
+		}
+		try {
+			let uuid = diary.uuid;
+			if (uuid === 'NOT_SAVED') {
+				const savedDiary = await diaryManager.addDiary(diary);
+				uuid = savedDiary.uuid;
+			}
+			const { url, diary: result } = await diaryManager.shareDiaryViaURL(uuid);
+			setDiary(result);
+			await writeText(url);
+			openURLCopied({ url });
+		} finally {
+			setIsProcessing(false);
+		}
+	}, [isSharable, diary, setDiary, openURLCopied]);
+	const onStopUrlSharingClick = useCallback(async () => {
+		if (!diary.isSharedViaURL) {
+			await message('이 일기는 URL을 통해 공유되지 않았습니다.');
+			return;
+		}
+		setIsProcessing(true);
+		try {
+			await diaryManager.stopURLSharingAndReEncrypt(diary.uuid);
+		} finally {
+			setIsProcessing(false);
+		}
+	}, [diary.isSharedViaURL, diary.uuid]);
+	const onClickStopShareViaUrl = useCallback(() => {
+		openStopURLSharing({
+			onStopUrlSharingClick,
+		});
+	}, [openStopURLSharing, onStopUrlSharingClick]);
+	return (
+		<UserPickerDrawer
+			title='친구들에게 일기 공유하기'
+			buttons={[
+				{
+					label: diary.isSharedViaURL ? 'URL 공유 중단' : 'URL로 공유',
+					variant: 'secondary',
+					loading: isProcessing,
+					onClick: diary.isSharedViaURL
+						? onClickStopShareViaUrl
+						: onClickShareViaUrl,
+				},
+				{ label: '공유', loading: isProcessing, onClick: onClickShare },
+			]}
+			defaultSelected={diary.sharedWith}
+			close={close}
+		/>
+	);
+}
+````
+
+## File: package.json
+````json
+{
+	"name": "sotto-app",
+	"private": true,
+	"version": "1.2.1-sunrin-festival-experience",
+	"type": "module",
+	"config": {
+		"commitizen": {
+			"path": "./node_modules/cz-conventional-changelog"
+		}
+	},
+	"scripts": {
+		"dev": "vite",
+		"build": "tsc && vite build",
+		"ios": "tauri ios dev \"iPhone 17\"",
+		"android": "tauri android dev \"Pixel_9_Pro\"",
+		"tauri": "tauri",
+		"check": "biome check",
+		"format": "biome check --fix && bun repomix",
+		"repomix": "repomix -c ./repomix.config.json",
+		"build:ios-sim": "rimraf ./src-tauri/gen/apple/build/arm64-sim && tauri ios build --target aarch64-sim",
+		"build:android": "tauri android build",
+		"build:all": "bun build:ios-sim && bun build:android",
+		"commit": "bun format && git add . && cz"
+	},
+	"dependencies": {
+		"@tauri-apps/api": "^2.5.0",
+		"@tauri-apps/plugin-biometric": "~2",
+		"@tauri-apps/plugin-clipboard-manager": "~2",
+		"@tauri-apps/plugin-dialog": "~2",
+		"@tauri-apps/plugin-fs": "~2",
+		"@tauri-apps/plugin-http": "~2",
+		"@tauri-apps/plugin-log": "~2",
+		"@tauri-apps/plugin-opener": "^2.2.6",
+		"@tauri-apps/plugin-stronghold": "^2.2.0",
+		"@vanilla-extract/css": "^1.17.1",
+		"classnames": "^2.5.1",
+		"dayjs": "^1.11.13",
+		"emojibase-data": "^16.0.3",
+		"lucide-react": "^0.510.0",
+		"motion": "^12.10.5",
+		"nanoid": "^5.1.5",
+		"nuqs": "^2.4.3",
+		"qrcode.react": "^4.2.0",
+		"react": "^19.1.0",
+		"react-dom": "^19.1.0",
+		"react-router-dom": "^7.6.0",
+		"tauri-plugin-keychain": "^2.0.1",
+		"use-debounce": "^10.0.4",
+		"uuid": "^11.1.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.4",
+		"@commitlint/cli": "^19.8.1",
+		"@commitlint/config-conventional": "^19.8.1",
+		"@tauri-apps/cli": "^2.5.0",
+		"@types/react": "^19.1.3",
+		"@types/react-dom": "^19.1.3",
+		"@vanilla-extract/vite-plugin": "^5.0.1",
+		"@vitejs/plugin-react": "^4.4.1",
+		"commitizen": "^4.3.1",
+		"cz-conventional-changelog": "^3.3.0",
+		"fast-glob": "^3.3.3",
+		"repomix": "^0.3.7",
+		"rimraf": "^6.0.1",
+		"typescript": "~5.8.3",
+		"vite": "^6.3.5"
+	}
+}
+````
+
+## File: src/routes/diary/index.tsx
+````typescript
+import { ShareDiaryDrawer } from '@/components/features/diary/share-drawer';
+import { ReplyListDrawer } from '@/components/features/reply/list-drawer';
+import { ReplySendDrawer } from '@/components/features/reply/send-drawer';
+import { Column } from '@/components/layout/column';
+import { Container } from '@/components/layout/container';
+import { Row } from '@/components/layout/row';
+import { DiaryAdditionalInfo } from '@/components/pages/diary/additional-info';
+import { DiaryAttachments } from '@/components/pages/diary/attachments';
+import { DiaryContext } from '@/components/pages/diary/context';
+import { DiarySavingPopup } from '@/components/pages/diary/saving-popup';
+import { Divider } from '@/components/ui/divider';
+import { EmojiInput } from '@/components/ui/input/emoji';
+import { TopNavigator } from '@/components/ui/top-navigator';
+import { GoBack } from '@/components/ui/top-navigator/go-back';
+import { Typo } from '@/components/ui/typography';
+import { useDiary } from '@/hooks/use-diary';
+import { useOverlay } from '@/hooks/use-overlay';
+import { log } from '@/lib/log';
+import { diaryManager } from '@/lib/managers/diary';
+import { color } from '@/styles/color.css';
+import { message } from '@tauri-apps/plugin-dialog';
+import { MessageCircle, Share, SmilePlus } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { page, textArea, textAreaContainer, titleInput } from './page.css';
+export default function DiaryPage() {
+	const [searchParams] = useSearchParams();
+	const diaryUUID = useMemo(() => searchParams.get('uuid'), [searchParams]);
+	const isReadOnly = useMemo(
+		() => searchParams.get('readonly') === 'true',
+		[searchParams],
+	);
+	const [diary, diaryDispatch] = useDiary(diaryUUID);
+	const { setDiary, setEmoji, setTitle, setContent } = diaryDispatch;
+	const [isAttachmentUpdated, setIsAttachmentUpdated] = useState(false);
+	const [isSaving, setIsSaving] = useState(false);
+	const { show: openShareDrawer } = useOverlay(ShareDiaryDrawer, {
+		preventBackdropClose: isSaving,
+	});
+	const { show: openSavingPopup, hide: closeSavingPopup } = useOverlay(
+		DiarySavingPopup,
+		{ preventBackdropClose: true },
+	);
+	const { show: openSendReply } = useOverlay(ReplySendDrawer);
+	const { show: openReplies } = useOverlay(ReplyListDrawer);
+	const saveDiary = useCallback(
+		async (next: () => void) => {
+			if ((!diary.emoji && !diary.title && !diary.content) || diary.readonly) {
+				next();
+				return;
+			}
+			setIsSaving(true);
+			openSavingPopup({});
+			try {
+				if (diaryManager.getDiary(diary.uuid)) {
+					await diaryManager.updateDiary(
+						diary.uuid,
+						diary,
+						isAttachmentUpdated,
+					);
+				} else {
+					await diaryManager.addDiary(diary);
+				}
+				next();
+			} catch (error) {
+				log('error', 'Error while saving diary', error);
+				await message('일기 저장에 실패했습니다. 다시 시도해주세요.');
+			} finally {
+				setIsSaving(false);
+				closeSavingPopup();
+			}
+		},
+		[diary, isAttachmentUpdated, openSavingPopup, closeSavingPopup],
+	);
+	const onClickShare = useCallback(() => {
+		openShareDrawer({ diary, isAttachmentUpdated, setDiary });
+	}, [diary, isAttachmentUpdated, setDiary, openShareDrawer]);
+	const onClickSendReply = useCallback(() => {
+		openSendReply({ diary });
+	}, [diary, openSendReply]);
+	const onClickViewReplies = useCallback(() => {
+		openReplies({ diary });
+	}, [diary, openReplies]);
+	return (
+		<DiaryContext
+			value={{
+				diary,
+				diaryDispatch,
+				isAttachmentUpdated,
+				setIsAttachmentUpdated,
+			}}
+		>
+			<Column className={page} justify='start'>
+				<TopNavigator
+					leadingArea={<GoBack beforeBack={saveDiary} />}
+					trailingArea={
+						isReadOnly ? (
+							<SmilePlus onClick={onClickSendReply} />
+						) : (
+							<Row gap={16}>
+								{diary.shareUUID && (
+									<MessageCircle onClick={onClickViewReplies} />
+								)}
+								<Share onClick={onClickShare} />
+							</Row>
+						)
+					}
+				/>
+				<Container vertical='large' horizontal='large'>
+					<Column gap={24}>
+						<Column gap={12}>
+							<EmojiInput
+								defaultValue={diary.emoji}
+								onValue={setEmoji}
+								disabled={isSaving || isReadOnly}
+							/>
+							<input
+								className={titleInput}
+								placeholder='새 일기'
+								value={diary.title}
+								onChange={(e) => setTitle(e.target.value)}
+								disabled={isSaving || isReadOnly}
+							/>
+							<Typo.Caption color={color.sand}>{`마지막 수정: ${new Date(
+								diary.updatedAt,
+							).toLocaleString()}`}</Typo.Caption>
+						</Column>
+						<DiaryAdditionalInfo />
+					</Column>
+				</Container>
+				<Divider />
+				<DiaryAttachments />
+				<Container
+					className={textAreaContainer}
+					vertical='large'
+					horizontal='large'
+				>
+					<textarea
+						className={textArea}
+						placeholder='일기를 작성하세요'
+						value={diary.content}
+						onChange={(e) => setContent(e.target.value)}
+						disabled={isSaving || isReadOnly}
+					/>
+				</Container>
+			</Column>
+		</DiaryContext>
+	);
+}
+````
+
 ## File: src/lib/managers/diary.ts
 ````typescript
-import { encryptJson } from '@/binding/function/encrypt-json';
+import { encryptData } from '@/binding/function/encrypt-data';
 import { encryptKeyForRecipient } from '@/binding/function/encrypt-key-for-recipient';
+import { generateAesKey } from '@/binding/function/generate-aes-key';
 import type { Dayjs } from 'dayjs';
 import { v4 } from 'uuid';
-import type { Weather } from '../weather';
+import { log } from '../log';
+import { uploadAttachments } from './attachment';
+import { fileStorage } from './file';
 import { type User, friendManager } from './friend';
 import { apiClient } from './http';
 import { storageClient } from './storage';
-export interface Diary {
-	uuid: string;
-	shareUUID: string | null;
-	sharedBy: string | null;
-	emoji: string;
-	title: string;
-	content: string;
-	location?: string;
-	weather?: Weather;
-	attachments: Array<string>;
-	sharedWith: Array<string>;
-	encryptedData: string | null;
-	aesKey: string | null;
-	encryptedKey: string | null;
-	nonce: string | null;
-	readonly: boolean;
-	isSharedViaURL: boolean;
-	createdAt: Date;
-	updatedAt: Date;
-}
-interface DiaryEditable {
-	emoji: string;
-	title: string;
-	content: string;
-}
-export interface Reply extends ReplyData {
-	uuid: string;
-	diaryId: string;
-	authorId: string;
-	createdAt: Date;
-}
 class DiaryManager {
 	private data: Map<string, Diary> = new Map();
 	public isInitialized = false;
@@ -10057,7 +10936,11 @@ class DiaryManager {
 		await this.saveData();
 		return diary;
 	}
-	async updateDiary(uuid: string, updatedData: Diary | DiaryEditable) {
+	async updateDiary(
+		uuid: string,
+		updatedData: Diary | DiaryEditable,
+		updateAttachments = false,
+	) {
 		this.checkInitialized();
 		const diary = this.data.get(uuid);
 		if (!diary) {
@@ -10071,7 +10954,13 @@ class DiaryManager {
 		this.data.set(uuid, updatedDiary);
 		await this.saveData();
 		if (diary.shareUUID && diary.aesKey) {
-			const [encryptedData, _, nonce] = await encryptJson(
+			if (updateAttachments) {
+				updatedDiary.attachments = await uploadAttachments(
+					updatedDiary.attachments,
+					diary.aesKey,
+				);
+			}
+			const [encryptedData, _, nonce] = await encryptData(
 				updatedDiary,
 				diary.aesKey,
 			);
@@ -10084,41 +10973,31 @@ class DiaryManager {
 		}
 		return updatedDiary;
 	}
-	async shareDiary(
-		uuid: string,
-		targetUsers: Array<User>,
-		preventDelete = false,
-	) {
+	async shareDiary(uuid: string, targetUsers: Array<User>) {
 		this.checkInitialized();
 		const diary = this.data.get(uuid);
 		if (!diary) {
 			throw new Error('Diary not found');
 		}
+		if (diary.readonly) {
+			throw new Error('Cannot share a readonly diary');
+		}
 		if (diary.shareUUID) {
-			if (targetUsers.length === 0 && !preventDelete) {
-				await apiClient.delete(`/diaries/${diary.shareUUID}`);
-				diary.shareUUID = null;
-				diary.encryptedData = null;
-				diary.aesKey = null;
-				diary.nonce = null;
-				diary.sharedWith = [];
-			} else {
-				const removedUsers = diary.sharedWith.filter(
-					(uuid) => !targetUsers.some((user) => user.uuid === uuid),
-				);
-				await Promise.all(
-					removedUsers.map((uuid) =>
-						apiClient.delete(
-							`/diaries/shared/${diary.shareUUID}/users/${uuid}`,
-						),
-					),
-				);
-				diary.sharedWith = diary.sharedWith.filter(
-					(uuid) => !removedUsers.includes(uuid),
-				);
-			}
+			const removedUsers = diary.sharedWith.filter(
+				(uuid) => !targetUsers.some((user) => user.uuid === uuid),
+			);
+			await Promise.all(
+				removedUsers.map((uuid) =>
+					apiClient.delete(`/diaries/shared/${diary.shareUUID}/users/${uuid}`),
+				),
+			);
+			diary.sharedWith = diary.sharedWith.filter(
+				(uuid) => !removedUsers.includes(uuid),
+			);
 		} else {
-			const [encryptedData, aesKey, nonce] = await encryptJson(diary);
+			const aesKey = await generateAesKey();
+			diary.attachments = await uploadAttachments(diary.attachments, aesKey);
+			const [encryptedData, , nonce] = await encryptData(diary, aesKey);
 			diary.encryptedData = encryptedData;
 			diary.aesKey = aesKey;
 			diary.nonce = nonce;
@@ -10144,6 +11023,32 @@ class DiaryManager {
 		await this.saveData();
 		return diary;
 	}
+	async cancelShare(uuid: string) {
+		this.checkInitialized();
+		const diary = this.data.get(uuid);
+		if (!diary) {
+			throw new Error('Diary not found');
+		}
+		if (!diary.shareUUID) {
+			throw new Error('Diary is not shared');
+		}
+		if (diary.readonly) {
+			throw new Error('Cannot cancel share for a readonly diary');
+		}
+		await apiClient.delete(`/diaries/${diary.shareUUID}`);
+		for (const attachment of diary.attachments) {
+			attachment.remote_url = undefined;
+		}
+		diary.shareUUID = null;
+		diary.encryptedData = null;
+		diary.aesKey = null;
+		diary.nonce = null;
+		diary.sharedWith = [];
+		diary.updatedAt = new Date();
+		this.data.set(uuid, diary);
+		await this.saveData();
+		return diary;
+	}
 	async shareDiaryViaURL(uuid: string) {
 		this.checkInitialized();
 		const diary = this.data.get(uuid);
@@ -10153,7 +11058,7 @@ class DiaryManager {
 		let shareUUID = diary.shareUUID;
 		let aesKey = diary.aesKey;
 		if (!shareUUID || !aesKey) {
-			const sharedDiary = await this.shareDiary(uuid, [], true);
+			const sharedDiary = await this.shareDiary(uuid, []);
 			shareUUID = sharedDiary.shareUUID;
 			aesKey = sharedDiary.aesKey;
 		}
@@ -10184,7 +11089,7 @@ class DiaryManager {
 			throw new Error('Diary is not shared via URL');
 		}
 		await apiClient.delete(`/diaries/${diary.shareUUID}`);
-		const [encryptedData, aesKey, nonce] = await encryptJson(diary);
+		const [encryptedData, aesKey, nonce] = await encryptData(diary);
 		diary.encryptedData = encryptedData;
 		diary.aesKey = aesKey;
 		diary.nonce = nonce;
@@ -10223,6 +11128,15 @@ class DiaryManager {
 		}
 		if (!diary.sharedBy && diary.shareUUID) {
 			await apiClient.delete(`/diaries/${diary.shareUUID}`);
+		}
+		if (diary.attachments.length > 0 && !diary.readonly) {
+			for (const attachment of diary.attachments) {
+				try {
+					await fileStorage.deleteFile(attachment.local_id);
+				} catch (error) {
+					log('error', 'Failed to delete attachment:', error);
+				}
+			}
 		}
 		this.data.delete(uuid);
 		this.saveData();

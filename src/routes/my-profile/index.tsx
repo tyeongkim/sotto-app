@@ -42,19 +42,19 @@ export default function MyProfilePage() {
 					<Typo.Body>@{localStorage.getItem('username')}</Typo.Body>
 				</Column>
 				<Container vertical='large' horizontal='large'>
-					<Button fill onClick={openChangeName}>
-						Change name
+					<Button fill onClick={openChangeName} disabled>
+						이름 변경
 					</Button>
 				</Container>
 				<Container vertical='none'>
 					<Row gap={8}>
 						<Stat
-							name='Diary'
+							name='일기'
 							value={diaryManager.getAllDiaries().length}
 							onClick={() => navigate('/explorer/diaries')}
 						/>
 						<Stat
-							name='Friend'
+							name='친구'
 							value={friendManager.getFriends().length}
 							onClick={() => navigate('/explorer/friends')}
 						/>
@@ -63,20 +63,20 @@ export default function MyProfilePage() {
 				<PaddingDivider />
 				<MyProfileExplorerItem
 					icon={<MapPin size={20} />}
-					name='Location alias'
+					name='위치 별칭'
 					path='/explorer/location-alias'
 				/>
 				<Container vertical='large'>
 					<Typo.Caption color={color.sand}>
-						Version {packageJson.version} {import.meta.env.MODE}
+						Version {packageJson.version} - {import.meta.env.MODE}
 					</Typo.Caption>
 				</Container>
 				<ButtonGroup direction='vertical' float>
 					<Button variant='text' fill onClick={openResetConfirm}>
-						Reset
+						초기화
 					</Button>
-					<Button fill variant='secondary' onClick={onClickLock}>
-						Lock the app
+					<Button fill variant='secondary' onClick={onClickLock} disabled>
+						앱 잠그기
 					</Button>
 				</ButtonGroup>
 			</Column>

@@ -21,7 +21,7 @@ export default function SignInPinPage() {
 				throw new Error('PIN not found');
 			}
 			if (pin !== savedPin) {
-				await message('Invalid PIN', { kind: 'error' });
+				await message('잘못된 PIN입니다', { kind: 'error' });
 				return;
 			}
 
@@ -30,7 +30,7 @@ export default function SignInPinPage() {
 			navigate('/home');
 		} catch (error) {
 			log('error', 'PIN authentication failed', error);
-			await message('PIN authentication failed', { kind: 'error' });
+			await message('PIN 인증에 실패했습니다', { kind: 'error' });
 		}
 	};
 
@@ -38,7 +38,7 @@ export default function SignInPinPage() {
 		<Column className={page}>
 			<Column className={page}>
 				<Container className={title}>
-					<Typo.Lead weight='strong'>Enter your PIN</Typo.Lead>
+					<Typo.Lead weight='strong'>PIN을 입력하세요</Typo.Lead>
 				</Container>
 				<Container vertical='small'>
 					<PINInput onPin={onPin} />
@@ -47,13 +47,13 @@ export default function SignInPinPage() {
 			<ButtonGroup direction='vertical' bottomSafeAreaPadding>
 				<Link to='/sign-in/forgot-pin'>
 					<Button fill variant='text'>
-						Forgot your PIN?
+						PIN을 잊으셨나요?
 					</Button>
 				</Link>
 				{localStorage.getItem('useBiometricLogin') === 'true' && (
 					<Link to='/sign-in/biometric'>
 						<Button fill variant='secondary'>
-							Use Biometric instead
+							생체 인증으로 로그인
 						</Button>
 					</Link>
 				)}

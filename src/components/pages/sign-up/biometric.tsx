@@ -16,15 +16,15 @@ export function SignUpBiometricSection(props: SignUpBiometricSectionProps) {
 		<Column className={fillHeight}>
 			<Content
 				icon={<ScanFace size={48} />}
-				title='Use Biometric Login?'
-				description='You can use FaceID or TouchID to use this app'
+				title='생체 인증을 사용할까요?'
+				description='Face ID 또는 Touch ID로 앱을 이용할 수 있어요'
 			/>
 			<ButtonGroup bottomSafeAreaPadding>
 				<Button fill variant='secondary' onClick={() => signUp(false)}>
-					No
+					아니오
 				</Button>
 				<Button fill onClick={() => signUp(true)}>
-					Yes
+					예
 				</Button>
 			</ButtonGroup>
 		</Column>

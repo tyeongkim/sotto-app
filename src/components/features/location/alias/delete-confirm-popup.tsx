@@ -23,7 +23,7 @@ export function LocationAliasDeleteConfirmPopup(
 			await locationManager.deleteAlias(alias.uuid);
 		} catch (error) {
 			log('error', 'Failed to delete alias:', error);
-			await message('Failed to delete alias.');
+			await message('별칭 삭제에 실패했어요.');
 			return;
 		} finally {
 			close();
@@ -34,15 +34,15 @@ export function LocationAliasDeleteConfirmPopup(
 		<Popup>
 			<PopupContent
 				icon={<TriangleAlert />}
-				title={`Delete "${alias.name}"?`}
-				description='This action cannot be undo.'
+				title={`\"${alias.name}\"을(를) 삭제할까요?`}
+				description='이 작업은 되돌릴 수 없어요.'
 			/>
 			<ButtonGroup smallPadding>
 				<Button fill onClick={onClickDelete}>
-					Delete
+					삭제
 				</Button>
 				<Button fill variant='secondary' onClick={close}>
-					Cancel
+					취소
 				</Button>
 			</ButtonGroup>
 		</Popup>

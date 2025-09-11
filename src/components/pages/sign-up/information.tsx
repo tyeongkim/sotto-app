@@ -33,34 +33,28 @@ export function SignUpInformationSection() {
 
 	const onClickSignUp = useCallback(async () => {
 		if (!name) {
-			await message('Please enter your name.', { kind: 'error' });
+			await message('이름을 입력해주세요.', { kind: 'error' });
 			return;
 		}
 		if (name.length < 1 || name.length > 50) {
-			await message('Name must be between 1 and 50 characters long.', {
-				kind: 'error',
-			});
-			return;
-		}
-		if (!/^[a-zA-Z\s]+$/.test(name)) {
-			await message('Name can only contain letters and spaces.', {
+			await message('이름은 1자 이상 50자 이하여야 합니다.', {
 				kind: 'error',
 			});
 			return;
 		}
 
 		if (!username) {
-			await message('Please enter your username.', { kind: 'error' });
+			await message('사용자 이름을 입력해주세요.', { kind: 'error' });
 			return;
 		}
 		if (username.length < 6 || username.length > 24) {
-			await message('Username must be between 6 and 24 characters long.', {
+			await message('사용자 이름은 6자 이상 24자 이하여야 합니다.', {
 				kind: 'error',
 			});
 			return;
 		}
 		if (!/^[a-zA-Z0-9.]+$/.test(username)) {
-			await message('Username must contain only letters, numbers, and dots.', {
+			await message('사용자 이름은 영문자, 숫자, 마침표만 사용할 수 있어요.', {
 				kind: 'error',
 			});
 			return;
@@ -74,17 +68,17 @@ export function SignUpInformationSection() {
 			<TopNavigator leadingArea={<GoBack />} />
 			<Column className={fillHeight}>
 				<Container className={title}>
-					<Typo.Title weight='strong'>Sign up</Typo.Title>
+					<Typo.Title weight='strong'>회원가입</Typo.Title>
 				</Container>
-				<InputField label='Profile Image'>
+				<InputField label='프로필 이미지'>
 					<ImageInput onImage={onChangeProfileImage} />
 				</InputField>
-				<InputField label='Name'>
-					<Input placeholder='Your full name' value={name} onValue={setName} />
+				<InputField label='이름'>
+					<Input placeholder='이름' value={name} onValue={setName} />
 				</InputField>
-				<InputField label='Username'>
+				<InputField label='사용자 이름'>
 					<Input
-						placeholder='Alphabet and number only'
+						placeholder='영문/숫자/점(.)만 사용 가능'
 						value={username}
 						onValue={setUsername}
 					/>
@@ -92,7 +86,7 @@ export function SignUpInformationSection() {
 			</Column>
 			<ButtonGroup bottomSafeAreaPadding>
 				<Button fill onClick={onClickSignUp}>
-					Sign up
+					회원가입
 				</Button>
 			</ButtonGroup>
 		</Column>

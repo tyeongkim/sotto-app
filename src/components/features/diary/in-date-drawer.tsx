@@ -22,7 +22,7 @@ export function DiaryInDateDrawer(
 		<Drawer close={close}>
 			<Container vertical='small'>
 				<Row justify='center'>
-					<Typo.Body weight='strong'>{day.format('MMMM DD, YYYY')}</Typo.Body>
+					<Typo.Body weight='strong'>{day.format('YYYY/MM/DD')}</Typo.Body>
 				</Row>
 			</Container>
 			<Container className={list}>

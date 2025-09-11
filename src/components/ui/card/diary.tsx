@@ -39,18 +39,18 @@ export function DiaryCard(props: DiaryCardProps) {
 			<Column className={content} align='end' justify='space-between'>
 				<Typo.Caption>
 					{diffDays === 0
-						? 'Today'
+						? '오늘'
 						: diffDays === 1
-							? 'Yesterday'
-							: `${diffDays} days ago`}
+							? '어제'
+							: `${diffDays}일 전`}
 				</Typo.Caption>
 				<Column className={preventOverflow} justify='end' align='start'>
 					<Typo.Title>{diary.emoji}</Typo.Title>
 					<Typo.Body className={title} weight='strong'>
-						{diary.title || 'Untitled'}
+						{diary.title || '제목없음'}
 					</Typo.Body>
 					<Typo.Caption className={preview}>
-						{diary.content.split('\n')[0].trim() || 'No content yet :('}
+						{diary.content.split('\n')[0].trim() || '아직 내용이 없어요 :('}
 					</Typo.Caption>
 				</Column>
 			</Column>

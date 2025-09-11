@@ -18,7 +18,7 @@ export function LocationAliasAddDrawer(props: OverlayProps) {
 
 	const onClickAdd = useCallback(async () => {
 		if (!name || !address) {
-			await message('Please fill in all fields.');
+			await message('모든 항목을 입력해 주세요.');
 			return;
 		}
 
@@ -26,7 +26,7 @@ export function LocationAliasAddDrawer(props: OverlayProps) {
 			await locationManager.addAlias(name, address);
 		} catch (error) {
 			log('error', 'Failed to add alias:', error);
-			await message('Failed to add alias.');
+			await message('별칭 추가에 실패했어요.');
 		} finally {
 			close();
 		}
@@ -34,20 +34,16 @@ export function LocationAliasAddDrawer(props: OverlayProps) {
 
 	return (
 		<Drawer close={close}>
-			<DrawerTitle>Add other alias</DrawerTitle>
-			<InputField label='Name'>
-				<Input placeholder='Enter name' value={name} onValue={setName} />
+			<DrawerTitle>다른 별칭 추가</DrawerTitle>
+			<InputField label='이름'>
+				<Input placeholder='이름 입력' value={name} onValue={setName} />
 			</InputField>
-			<InputField label='Address'>
-				<Input
-					placeholder='Enter address'
-					value={address}
-					onValue={setAddress}
-				/>
+			<InputField label='주소'>
+				<Input placeholder='주소 입력' value={address} onValue={setAddress} />
 			</InputField>
 			<ButtonGroup>
 				<Button fill onClick={onClickAdd}>
-					Add
+					추가
 				</Button>
 			</ButtonGroup>
 		</Drawer>
