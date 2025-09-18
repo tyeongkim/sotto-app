@@ -71,10 +71,14 @@ export function ShareDiaryDrawer(props: DiaryShareDrawerProps & OverlayProps) {
 		}
 
 		try {
+			setIsProcessing(true);
+
 			let uuid = diary.uuid;
 			if (uuid === 'NOT_SAVED') {
 				const savedDiary = await diaryManager.addDiary(diary);
 				uuid = savedDiary.uuid;
+			} else {
+				await diaryManager.updateDiary(uuid, diary, false);
 			}
 
 			const { url, diary: result } = await diaryManager.shareDiaryViaURL(uuid);
