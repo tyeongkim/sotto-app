@@ -4,7 +4,7 @@ import { uiStyle } from '@/styles/layer.css';
 export const topNavigator = uiStyle({
 	position: 'fixed',
 	width: '100%',
-	height: 'calc(48px + env(safe-area-inset-top))',
+	height: 48 + 12,
 	padding: '0 16px',
 	backgroundColor: color.milk,
 	top: 0,
@@ -17,6 +17,6 @@ export const content = uiStyle({
 });
 
 export const spacer = uiStyle({
-	height: 'calc(48px + env(safe-area-inset-top))',
+	height: 48 + 12,
 	flexShrink: 0,
 });

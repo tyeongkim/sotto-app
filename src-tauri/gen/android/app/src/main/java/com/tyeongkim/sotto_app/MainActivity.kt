@@ -7,7 +7,7 @@ import androidx.core.view.WindowCompat
 class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    WindowCompat.setDecorFitsSystemWindows(window, false)
+//    WindowCompat.setDecorFitsSystemWindows(window, false)
     window.statusBarColor = Color.rgb(243,238, 234);
   }
 }
