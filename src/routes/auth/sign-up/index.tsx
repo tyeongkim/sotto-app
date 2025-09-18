@@ -59,8 +59,11 @@ export default function SignUpPage() {
 
 				navigate('/home');
 			} catch (error) {
-				await message(`회원가입에 실패했습니다. ${error}`, { kind: 'error' });
-				log('error', 'Sign up failed', error);
+				await message(
+					`회원가입에 실패했습니다. ${error}, ${apiClient.getBaseUrl()}`,
+					{ kind: 'error' },
+				);
+				log('error', error);
 			}
 		},
 		[name, username, profileImage, pin, navigate],

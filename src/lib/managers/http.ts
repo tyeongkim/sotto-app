@@ -20,6 +20,10 @@ class APIClient {
 		}
 	}
 
+	public getBaseUrl(): string {
+		return this.baseUrl;
+	}
+
 	private async request<T>(
 		path: string,
 		method: string,
