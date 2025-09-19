@@ -42,8 +42,14 @@ export default function SignUpPage() {
 					},
 				);
 
-				storageClient.set('publicKey', publicKeyPem);
-				storageClient.set('privateKey', privateKeyPem);
+				try {
+					await storageClient.set('publicKey', publicKeyPem);
+					await storageClient.set('privateKey', privateKeyPem);
+					log('debug', 'Successfully stored keys in storage');
+				} catch (keyStorageError) {
+					log('error', 'Failed to store keys:', keyStorageError);
+					throw new Error(`키 저장 실패: ${keyStorageError}`);
+				}
 				if (profileImage) {
 					localStorage.setItem('profileImage', profileImage);
 				}

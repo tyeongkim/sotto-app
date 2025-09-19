@@ -71,8 +71,10 @@ export async function decryptAttachment(fileUrl: string, aesKey: string) {
 
 	const privateKey = await storageClient.get('privateKey');
 	if (!privateKey) {
+		log('error', 'Private key not found in storage - storage initialized:', storageClient.isInitialized);
 		throw new Error('Private key not found');
 	}
+	log('debug', 'Successfully retrieved private key from storage');
 
 	const attachment: AttachmentResponse = await res.json();
 	const { data: encryptData, nonce } = attachment;

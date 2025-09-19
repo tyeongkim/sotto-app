@@ -7,14 +7,15 @@ import { Avatar } from '@/components/ui/avatar';
 import { DiaryCard } from '@/components/ui/card/diary';
 import { Content } from '@/components/ui/content';
 import { Divider } from '@/components/ui/divider';
-import { Typo } from '@/components/ui/typography';
 import { LoadingCircle } from '@/components/ui/loading-circle';
+import { Typo } from '@/components/ui/typography';
 import { useDrawer } from '@/hooks/use-drawer';
 import { log } from '@/lib/log';
 import { diaryManager } from '@/lib/managers/diary';
 import { friendManager } from '@/lib/managers/friend';
 import { apiClient } from '@/lib/managers/http';
 import { storageClient } from '@/lib/managers/storage';
+import { message } from '@tauri-apps/plugin-dialog';
 import { Ban, SmilePlus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -33,8 +34,10 @@ export function HomeFriendsDiariesSection() {
 			.then(async (data) => {
 				const privateKey = await storageClient.get('privateKey');
 				if (!privateKey) {
+					log('error', 'Private key not found in storage - storage initialized:', storageClient.isInitialized);
 					throw new Error('Private key not found');
 				}
+				log('debug', 'Successfully retrieved private key from storage');
 				for (const sharedDiary of data) {
 					const decryptedDiary = await decryptDiary(
 						privateKey,
@@ -88,7 +91,10 @@ export function HomeFriendsDiariesSection() {
 						),
 				);
 			})
-			.catch((error) => {
+			.catch(async (error) => {
+				await message('친구들의 일기를 불러오는 중에 문제가 발생했습니다.', {
+					kind: 'error',
+				});
 				log('error', 'Failed to load shared diaries:', error);
 			})
 			.finally(() => {
