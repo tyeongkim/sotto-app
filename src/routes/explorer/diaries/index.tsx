@@ -41,7 +41,7 @@ export default function ExplorerDiariesPage() {
 								<Row gap={8} align='center'>
 									{d.sharedBy && (
 										<Typo.Caption>
-											작성자 {friendManager.getFriend(d.sharedBy)?.name}
+											{friendManager.getFriend(d.sharedBy)?.name} 작성
 										</Typo.Caption>
 									)}
 									<ChevronRight size={20} />

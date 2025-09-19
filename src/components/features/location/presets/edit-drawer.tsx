@@ -26,6 +26,7 @@ export function LocationPresetsEditDrawer(
 	const [address, setAddress] = useState(
 		locationManager.getPresets()[name]?.address || '',
 	);
+	const [isLoading, setIsLoading] = useState(false);
 	const { show: openResetConfirm } = useOverlay(
 		LocationPresetsResetConfirmPopup,
 	);
@@ -36,14 +37,15 @@ export function LocationPresetsEditDrawer(
 			return;
 		}
 
+		setIsLoading(true);
 		try {
 			await locationManager.setPreset(name, address);
-		} catch (error) {
-			await message('프리셋 추가에 실패했어요');
-			return;
-		} finally {
 			close();
 			setTimeout(() => setAddress(''), 200);
+		} catch (error) {
+			await message('프리셋 추가에 실패했어요');
+		} finally {
+			setIsLoading(false);
 		}
 	}, [address, close, name]);
 
@@ -61,7 +63,7 @@ export function LocationPresetsEditDrawer(
 				<Button fill variant='secondary' onClick={onClickReset}>
 					초기화
 				</Button>
-				<Button fill onClick={onClickApply}>
+				<Button fill loading={isLoading} onClick={onClickApply}>
 					적용
 				</Button>
 			</ButtonGroup>

@@ -22,6 +22,7 @@ export function LocationPresetsAddDrawer(
 	const { name, close } = props;
 
 	const [address, setAddress] = useState('');
+	const [isLoading, setIsLoading] = useState(false);
 
 	const onClickAdd = useCallback(async () => {
 		if (!address.trim()) {
@@ -29,14 +30,15 @@ export function LocationPresetsAddDrawer(
 			return;
 		}
 
+		setIsLoading(true);
 		try {
 			await locationManager.setPreset(name, address);
-		} catch (error) {
-			await message('프리셋 추가에 실패했어요');
-			return;
-		} finally {
 			close();
 			setTimeout(() => setAddress(''), 200);
+		} catch (error) {
+			await message('프리셋 추가에 실패했어요');
+		} finally {
+			setIsLoading(false);
 		}
 	}, [address, close, name]);
 
@@ -47,7 +49,7 @@ export function LocationPresetsAddDrawer(
 				<Input placeholder='주소 입력' value={address} onValue={setAddress} />
 			</InputField>
 			<ButtonGroup>
-				<Button fill onClick={onClickAdd}>
+				<Button fill loading={isLoading} onClick={onClickAdd}>
 					추가
 				</Button>
 			</ButtonGroup>

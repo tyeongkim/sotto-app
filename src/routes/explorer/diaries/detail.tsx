@@ -89,16 +89,13 @@ export default function ExplorerDiariesDetailPage() {
 					content={diary.encryptedKey?.toString() || '데이터 없음'}
 				/>
 			)}
-			{/* <Container vertical='small'>
-				<Typo.Body>Share via URL is enabled</Typo.Body>
-			</Container> */}
 			<Container>
 				<Column gap={8}>
 					<Typo.Caption color={color.sand}>
-						생성: {new Date(diary.createdAt).toLocaleString()}
+						생성일 : {new Date(diary.createdAt).toLocaleString()}
 					</Typo.Caption>
 					<Typo.Caption color={color.sand}>
-						마지막 수정: {new Date(diary.updatedAt).toLocaleString()}
+						수정일 : {new Date(diary.updatedAt).toLocaleString()}
 					</Typo.Caption>
 				</Column>
 			</Container>

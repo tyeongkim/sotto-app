@@ -21,6 +21,7 @@ export function LocationAliasEditDrawer(
 
 	const [name, setName] = useState(alias.name || '');
 	const [address, setAddress] = useState(alias.address);
+	const [isLoading, setIsLoading] = useState(false);
 
 	const onClickApply = useCallback(async () => {
 		if (!name || !address) {
@@ -28,13 +29,15 @@ export function LocationAliasEditDrawer(
 			return;
 		}
 
+		setIsLoading(true);
 		try {
 			await locationManager.updateAlias(alias.uuid, { name, address });
+			close();
 		} catch (error) {
 			log('error', 'Failed to edit alias:', error);
 			await message('별칭 수정에 실패했어요.');
 		} finally {
-			close();
+			setIsLoading(false);
 		}
 	}, [alias.uuid, name, address, close]);
 
@@ -50,7 +53,7 @@ export function LocationAliasEditDrawer(
 				<Input placeholder='주소 입력' value={address} onValue={setAddress} />
 			</InputField>
 			<ButtonGroup>
-				<Button fill onClick={onClickApply}>
+				<Button fill loading={isLoading} onClick={onClickApply}>
 					적용
 				</Button>
 			</ButtonGroup>

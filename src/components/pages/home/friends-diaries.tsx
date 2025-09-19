@@ -8,6 +8,7 @@ import { DiaryCard } from '@/components/ui/card/diary';
 import { Content } from '@/components/ui/content';
 import { Divider } from '@/components/ui/divider';
 import { Typo } from '@/components/ui/typography';
+import { LoadingCircle } from '@/components/ui/loading-circle';
 import { useDrawer } from '@/hooks/use-drawer';
 import { log } from '@/lib/log';
 import { diaryManager } from '@/lib/managers/diary';
@@ -24,6 +25,7 @@ export function HomeFriendsDiariesSection() {
 			.map((friend) => friend.uuid)
 			.filter((userUUID) => diaryManager.getFriendDiaries(userUUID).length > 0),
 	);
+	const [isLoading, setIsLoading] = useState(true);
 
 	useEffect(() => {
 		apiClient
@@ -85,8 +87,23 @@ export function HomeFriendsDiariesSection() {
 							(userUUID) => diaryManager.getFriendDiaries(userUUID).length > 0,
 						),
 				);
+			})
+			.catch((error) => {
+				log('error', 'Failed to load shared diaries:', error);
+			})
+			.finally(() => {
+				setIsLoading(false);
 			});
 	}, []);
+
+	if (isLoading) {
+		return (
+			<Content
+				icon={<LoadingCircle size={48} />}
+				description='친구들의 일기를 불러오는 중...'
+			/>
+		);
+	}
 
 	return friendList.length > 0 ? (
 		friendList.map((userUUID) => (

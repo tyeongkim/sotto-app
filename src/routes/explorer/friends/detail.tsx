@@ -40,7 +40,7 @@ export default function ExplorerFriendsDetailPage() {
 
 	return (
 		<>
-			<TopNavigator leadingArea={<GoBack label='Friends' />} />
+			<TopNavigator leadingArea={<GoBack label='친구' />} />
 			<Container horizontal='none'>
 				<Column gap={16} align='center'>
 					<Avatar size={72} src={friend.profileUrl} />
@@ -56,23 +56,23 @@ export default function ExplorerFriendsDetailPage() {
 			) : (
 				<Container>
 					<Button fill variant='secondary' onClick={onClickPublicKey}>
-						Click to reveal public key
+						공개키 확인
 					</Button>
 				</Container>
 			)}
 			<Container>
 				<Column gap={8}>
 					<Typo.Caption color={color.sand}>
-						Created : {new Date(friend.createdAt).toLocaleString()}
+						생성일 : {new Date(friend.createdAt).toLocaleString()}
 					</Typo.Caption>
 					<Typo.Caption color={color.sand}>
-						Last Edited : {new Date(friend.updatedAt).toLocaleString()}
+						수정일 : {new Date(friend.updatedAt).toLocaleString()}
 					</Typo.Caption>
 				</Column>
 			</Container>
 			<ButtonGroup float>
 				<Button fill onClick={onClockBlock}>
-					Block
+					차단
 				</Button>
 			</ButtonGroup>
 		</>
