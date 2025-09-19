@@ -1,5 +1,13 @@
 {
-	"cSpell.words": ["armv", "decryptor", "encryptor", "pkcs", "rngs", "Sotto"],
+	"cSpell.words": [
+		"armv",
+		"decryptor",
+		"encryptor",
+		"pkcs",
+		"rngs",
+		"Sotto",
+		"unlisten"
+	],
 	"editor.defaultFormatter": "biomejs.biome",
 	"editor.formatOnSave": true,
 	"editor.codeActionsOnSave": {

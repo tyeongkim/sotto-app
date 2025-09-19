@@ -100,7 +100,9 @@ export default function DiaryPage() {
 		>
 			<Column className={page} justify='start'>
 				<TopNavigator
-					leadingArea={<GoBack beforeBack={saveDiary} />}
+					leadingArea={
+						<GoBack label='저장 후 뒤로가기' beforeBack={saveDiary} />
+					}
 					trailingArea={
 						isReadOnly ? (
 							<SmilePlus onClick={onClickSendReply} />
