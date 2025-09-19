@@ -27,6 +27,10 @@ import { image, input, item, list } from './styles/attachments.css';
 export function DiaryAttachments() {
 	const { diary } = useContext(DiaryContext);
 
+	if (diary.readonly && diary.attachments.length === 0) {
+		return null;
+	}
+
 	return (
 		<Container className={list} vertical='large' horizontal='large'>
 			<Row gap={8} justify='start'>
