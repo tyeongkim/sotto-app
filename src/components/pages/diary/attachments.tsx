@@ -62,7 +62,7 @@ function AddPhoto() {
 			const files = e.target.files;
 			if (!files || files.length === 0) return;
 			const fileList = Array.from(files).filter(
-				(file) => file.size <= 3.5 * 1024 * 1024,
+				(file) => file.size <= 10 * 1024 * 1024,
 			);
 			if (diary.attachments.length + fileList.length > 5) {
 				await message('사진은 최대 5장까지 추가할 수 있어요.', {
@@ -72,7 +72,7 @@ function AddPhoto() {
 			}
 			if (fileList.length < files.length) {
 				await message(
-					'일부 파일이 너무 커서 추가되지 않았어요. 최대 크기는 3.5MB예요.',
+					'일부 파일이 너무 커서 추가되지 않았어요. 최대 크기는 10MB예요.',
 				);
 			}
 
